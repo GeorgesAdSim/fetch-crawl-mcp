@@ -52,6 +52,10 @@ import {
   extractWithSchemaSchema,
   extractWithSchema,
 } from "./tools/extract-with-schema.js";
+import {
+  detectOrphanPagesSchema,
+  detectOrphanPages,
+} from "./tools/detect-orphan-pages.js";
 
 export function createServer(): McpServer {
   const server = new McpServer({
@@ -362,6 +366,24 @@ export function createServer(): McpServer {
     },
     async (args) => {
       const result = await auditSiteBatch(args);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  // Tool: detect_orphan_pages
+  server.registerTool(
+    "detect_orphan_pages",
+    {
+      title: "Detect Orphan Pages",
+      description:
+        "Detect orphan pages by cross-referencing sitemap URLs with crawled pages and internal link graph. Identifies pages with no inbound links (orphans), sitemap-only pages, crawl-only pages, and deep pages. Returns classification, link graph hubs, and sitemap/crawl coherence stats.",
+      inputSchema: detectOrphanPagesSchema,
+      annotations: { readOnlyHint: true },
+    },
+    async (args) => {
+      const result = await detectOrphanPages(args);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };
