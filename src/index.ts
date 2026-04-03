@@ -37,6 +37,11 @@ async function startHttp() {
 
   // --- Streamable HTTP (stateless) ---
 
+  app.head("/mcp", (_req, res) => {
+    res.setHeader("MCP-Protocol-Version", "2025-06-18");
+    res.status(200).end();
+  });
+
   app.post("/mcp", async (req, res) => {
     try {
       const server = createServer();
@@ -44,10 +49,12 @@ async function startHttp() {
         sessionIdGenerator: undefined,
       });
       await server.connect(transport);
-      await transport.handleRequest(req, res);
+      await transport.handleRequest(req, res, req.body);
     } catch (error) {
       console.error("Error handling MCP request:", error);
-      res.status(500).json({ error: "Internal server error" });
+      if (!res.headersSent) {
+        res.status(500).json({ error: "Internal server error" });
+      }
     }
   });
 
