@@ -65,9 +65,6 @@ interface CrawledPage {
   error?: string;
 }
 
-/**
- * Crawl a single URL and return the result + discovered internal links.
- */
 async function crawlOne(
   normalizedUrl: string,
   depth: number,
@@ -80,7 +77,6 @@ async function crawlOne(
     const result = await fetchUrl(normalizedUrl, { timeout: 15000 });
     const contentType = result.headers["content-type"] || "";
 
-    // Non-HTML page
     if (!contentType.includes("text/html")) {
       return {
         page: {
@@ -159,7 +155,6 @@ export async function crawlSite({
   const includeRegex = includePattern ? new RegExp(includePattern) : null;
   const excludeRegex = excludePattern ? new RegExp(excludePattern) : null;
 
-  // --- Robots.txt ---
   let disallowed: string[] = [];
   let robotsCrawlDelay: number | null = null;
   let robotsSitemaps: string[] = [];
@@ -170,7 +165,6 @@ export async function crawlSite({
     robotsCrawlDelay = robots.crawlDelay;
     robotsSitemaps = robots.sitemaps;
 
-    // robots.txt Crawl-delay overrides user delay if it's higher
     if (robotsCrawlDelay !== null && robotsCrawlDelay * 1000 > delay) {
       console.error(
         `robots.txt Crawl-delay: ${robotsCrawlDelay}s — overriding delay to ${robotsCrawlDelay * 1000}ms`
@@ -179,7 +173,6 @@ export async function crawlSite({
     }
   }
 
-  // --- Helper: pick next valid items from queue ---
   function pickBatch(size: number): Array<{ url: string; depth: number }> {
     const batch: Array<{ url: string; depth: number }> = [];
     while (queue.length > 0 && batch.length < size) {
@@ -200,24 +193,20 @@ export async function crawlSite({
     return batch;
   }
 
-  // --- Main crawl loop with concurrency pool ---
   let isFirstBatch = true;
 
   while (queue.length > 0 && results.length < maxPages) {
-    // Throttle between batches (with jitter)
     if (!isFirstBatch && delay > 0) {
       await sleep(jitter(delay));
     }
     isFirstBatch = false;
 
-    // How many slots left?
     const slotsLeft = maxPages - results.length;
     const batchSize = Math.min(concurrency, slotsLeft);
     const batch = pickBatch(batchSize);
 
     if (batch.length === 0) break;
 
-    // Fetch batch in parallel
     const batchResults = await Promise.all(
       batch.map(({ url: batchUrl, depth }) =>
         crawlOne(batchUrl, depth, url)
@@ -225,7 +214,6 @@ export async function crawlSite({
     );
 
     for (const { page, newLinks } of batchResults) {
-      // Handle 429 rate-limit
       if (page.status === 429) {
         console.error(`Rate limited on ${page.url}, backing off`);
         await sleep(jitter(5000));
@@ -236,7 +224,6 @@ export async function crawlSite({
 
       results.push(page);
 
-      // Enqueue discovered links
       if (page.depth < maxDepth) {
         for (const link of newLinks) {
           if (!visited.has(link.url)) {

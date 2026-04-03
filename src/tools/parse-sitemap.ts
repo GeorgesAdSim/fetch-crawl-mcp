@@ -31,7 +31,6 @@ async function parseSingleSitemap(url: string): Promise<{
 
   const $ = cheerio.load(result.body, { xmlMode: true });
 
-  // Check if it's a sitemap index
   const sitemapIndexUrls: string[] = [];
   $("sitemapindex > sitemap > loc").each((_, el) => {
     sitemapIndexUrls.push($(el).text().trim());
@@ -41,7 +40,6 @@ async function parseSingleSitemap(url: string): Promise<{
     return { entries: [], sitemapIndexUrls };
   }
 
-  // Parse regular sitemap
   const entries: SitemapEntry[] = [];
   $("urlset > url").each((_, el) => {
     const loc = $("loc", el).text().trim();
@@ -59,7 +57,6 @@ async function parseSingleSitemap(url: string): Promise<{
 }
 
 export async function parseSitemap({ url }: { url: string }) {
-  // Detect if URL is a sitemap or a site root
   let sitemapUrl = url;
   if (!url.includes("sitemap") && !url.endsWith(".xml")) {
     sitemapUrl = getSitemapUrl(url);
@@ -92,7 +89,7 @@ export async function parseSitemap({ url }: { url: string }) {
     sitemapUrl,
     sitemapsProcessed: processedSitemaps.length,
     totalUrls: allEntries.length,
-    entries: allEntries.slice(0, 500), // Limit output size
+    entries: allEntries.slice(0, 500),
     errors: errors.length > 0 ? errors : undefined,
     truncated: allEntries.length > 500,
   };

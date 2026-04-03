@@ -32,9 +32,6 @@ export interface ImageInfo {
   height: string | null;
 }
 
-/**
- * Extract metadata from HTML.
- */
 export function extractMetadata(html: string, baseUrl: string): PageMetadata {
   const $ = cheerio.load(html);
 
@@ -68,9 +65,6 @@ export function extractMetadata(html: string, baseUrl: string): PageMetadata {
   };
 }
 
-/**
- * Extract all headings from HTML.
- */
 export function extractHeadings(html: string): HeadingInfo[] {
   const $ = cheerio.load(html);
   const headings: HeadingInfo[] = [];
@@ -85,9 +79,6 @@ export function extractHeadings(html: string): HeadingInfo[] {
   return headings;
 }
 
-/**
- * Extract all links from HTML.
- */
 export function extractLinks(html: string, baseUrl: string): LinkInfo[] {
   const $ = cheerio.load(html);
   const links: LinkInfo[] = [];
@@ -114,9 +105,6 @@ export function extractLinks(html: string, baseUrl: string): LinkInfo[] {
   return links;
 }
 
-/**
- * Extract all images from HTML.
- */
 export function extractImages(html: string, baseUrl: string): ImageInfo[] {
   const $ = cheerio.load(html);
   const images: ImageInfo[] = [];
@@ -137,34 +125,24 @@ export function extractImages(html: string, baseUrl: string): ImageInfo[] {
   return images;
 }
 
-/**
- * Extract main text content from HTML (strips nav, footer, scripts, styles).
- */
 export function extractTextContent(html: string): string {
   const $ = cheerio.load(html);
 
-  // Remove non-content elements
   $(
     "script, style, nav, footer, header, aside, iframe, noscript, svg"
   ).remove();
 
-  // Get text from body
   const text = $("body").text();
 
-  // Clean up whitespace
   return text
     .replace(/\s+/g, " ")
     .replace(/\n\s*\n/g, "\n")
     .trim();
 }
 
-/**
- * Convert HTML to a simplified markdown-like text.
- */
 export function htmlToMarkdown(html: string): string {
   const $ = cheerio.load(html);
 
-  // Remove non-content elements
   $(
     "script, style, nav, footer, aside, iframe, noscript, svg"
   ).remove();
@@ -241,9 +219,6 @@ export function htmlToMarkdown(html: string): string {
     .trim();
 }
 
-/**
- * Extract JSON-LD structured data from HTML.
- */
 export function extractJsonLd(html: string): unknown[] {
   const $ = cheerio.load(html);
   const results: unknown[] = [];

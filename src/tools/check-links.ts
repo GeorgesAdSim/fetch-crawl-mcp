@@ -52,11 +52,9 @@ export async function checkLinks({
   concurrency: number;
   delay: number;
 }) {
-  // Fetch the page
   const result = await fetchUrl(url);
   const links = extractLinks(result.body, result.finalUrl);
 
-  // Deduplicate links by href
   const seen = new Set<string>();
   const uniqueLinks = links.filter((l) => {
     if (seen.has(l.href)) return false;
@@ -64,11 +62,9 @@ export async function checkLinks({
     return true;
   });
 
-  // Check links in batches with throttling + jitter
   const results: LinkCheckResult[] = [];
 
   for (let i = 0; i < uniqueLinks.length; i += concurrency) {
-    // Pause between batches with jitter (skip for the first batch)
     if (i > 0 && delay > 0) {
       await sleep(jitter(delay));
     }

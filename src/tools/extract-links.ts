@@ -29,7 +29,6 @@ export async function extractLinks({
       break;
   }
 
-  // Deduplicate by href
   const seen = new Set<string>();
   const uniqueLinks = links.filter((l) => {
     if (seen.has(l.href)) return false;

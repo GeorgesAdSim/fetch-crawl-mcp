@@ -6,10 +6,6 @@ interface RobotsRules {
   sitemaps: string[];
 }
 
-/**
- * Fetch and parse robots.txt for a given site.
- * Returns rules for the "*" user-agent (most permissive match).
- */
 export async function fetchRobotsTxt(
   baseUrl: string
 ): Promise<RobotsRules> {
@@ -36,15 +32,10 @@ export async function fetchRobotsTxt(
     const text = await response.text();
     return parseRobotsTxt(text);
   } catch {
-    // robots.txt not available – allow everything
     return rules;
   }
 }
 
-/**
- * Parse robots.txt content into rules.
- * Only extracts rules for User-agent: * (wildcard).
- */
 export function parseRobotsTxt(text: string): RobotsRules {
   const rules: RobotsRules = {
     disallowed: [],
@@ -56,17 +47,14 @@ export function parseRobotsTxt(text: string): RobotsRules {
   let inWildcardBlock = false;
 
   for (const line of lines) {
-    // Skip comments and empty lines
     if (line.startsWith("#") || line === "") continue;
 
-    // Global sitemaps (can appear anywhere)
     const sitemapMatch = line.match(/^sitemap:\s*(.+)/i);
     if (sitemapMatch) {
       rules.sitemaps.push(sitemapMatch[1].trim());
       continue;
     }
 
-    // User-agent directive
     const uaMatch = line.match(/^user-agent:\s*(.+)/i);
     if (uaMatch) {
       const agent = uaMatch[1].trim().toLowerCase();
@@ -74,7 +62,6 @@ export function parseRobotsTxt(text: string): RobotsRules {
       continue;
     }
 
-    // Only process rules for wildcard block
     if (!inWildcardBlock) continue;
 
     const disallowMatch = line.match(/^disallow:\s*(.*)/i);
@@ -93,9 +80,6 @@ export function parseRobotsTxt(text: string): RobotsRules {
   return rules;
 }
 
-/**
- * Check if a URL path is allowed by robots.txt rules.
- */
 export function isAllowedByRobots(
   urlStr: string,
   disallowed: string[]
@@ -103,7 +87,6 @@ export function isAllowedByRobots(
   try {
     const path = new URL(urlStr).pathname;
     for (const rule of disallowed) {
-      // Handle wildcard patterns
       if (rule.includes("*")) {
         const regex = new RegExp(
           "^" + rule.replace(/\*/g, ".*").replace(/\$/g, "$")

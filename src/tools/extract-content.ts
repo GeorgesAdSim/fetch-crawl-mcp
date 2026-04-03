@@ -30,8 +30,8 @@ export async function extractContent({ url }: { url: string }) {
     description: metadata.description,
     lang: metadata.lang,
     headings,
-    links: links.slice(0, 100), // Limit to first 100 links
-    images: images.slice(0, 50), // Limit to first 50 images
+    links: links.slice(0, 100),
+    images: images.slice(0, 50),
     textContent:
       textContent.length > 10000
         ? textContent.slice(0, 10000) + "\n... [truncated]"

@@ -1,9 +1,0 @@
-{
-  "mcpServers": {
-    "fetch-crawl": {
-      "type": "stdio",
-      "command": "node",
-      "args": ["./build/index.js"]
-    }
-  }
-}

@@ -16,6 +16,22 @@ import {
 } from "./tools/parse-sitemap.js";
 import { checkLinksSchema, checkLinks } from "./tools/check-links.js";
 import { screenshotSchema, screenshot } from "./tools/screenshot.js";
+import {
+  checkPerformanceSchema,
+  checkPerformance,
+} from "./tools/check-performance.js";
+import {
+  checkRedirectChainSchema,
+  checkRedirectChain,
+} from "./tools/check-redirect-chain.js";
+import {
+  checkMobileSchema,
+  checkMobile,
+} from "./tools/check-mobile.js";
+import {
+  checkStructuredDataSchema,
+  checkStructuredData,
+} from "./tools/check-structured-data.js";
 
 export function createServer(): McpServer {
   const server = new McpServer({
@@ -155,7 +171,7 @@ export function createServer(): McpServer {
     {
       title: "Screenshot",
       description:
-        "Capture a screenshot of a web page using a headless browser. Returns a PNG image as base64. Supports custom viewport size and full-page capture.",
+        "Capture a screenshot of a web page using a headless browser. Returns an image as base64 (PNG or JPEG). Supports custom viewport size, full-page capture, waiting for a CSS selector, and dismissing cookie consent banners.",
       inputSchema: screenshotSchema,
     },
     async (args) => {
@@ -168,6 +184,85 @@ export function createServer(): McpServer {
             mimeType: result.mimeType,
           },
         ],
+      };
+    }
+  );
+
+  // Tool: check_performance
+  server.registerTool(
+    "check_performance",
+    {
+      title: "Check Performance",
+      description:
+        "Measure web page performance metrics (TTFB, FCP, LCP, DOM Content Loaded, Fully Loaded) using a headless browser. Supports mobile (with network throttling) and desktop profiles. Returns a 0-100 score, detailed timings, network stats, and actionable issues.",
+      inputSchema: checkPerformanceSchema,
+      annotations: { readOnlyHint: true },
+    },
+    async (args) => {
+      const result = await checkPerformance(args);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  // Tool: check_redirect_chain
+  server.registerTool(
+    "check_redirect_chain",
+    {
+      title: "Check Redirect Chain",
+      description:
+        "Follow the redirect chain of a URL hop by hop (using manual redirect). Returns each hop with status, Location header, and Server header. Detects redirect loops, long chains, and HTTP-to-HTTPS upgrades.",
+      inputSchema: checkRedirectChainSchema,
+      annotations: { readOnlyHint: true },
+    },
+    async (args) => {
+      const result = await checkRedirectChain(args);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  // Tool: check_mobile
+  server.registerTool(
+    "check_mobile",
+    {
+      title: "Check Mobile",
+      description:
+        "Audit a web page for mobile-friendliness using a headless browser with iPhone viewport (375x812) and mobile User-Agent. Checks viewport meta, horizontal scroll, font sizes, tap target sizes, and returns a mobile screenshot.",
+      inputSchema: checkMobileSchema,
+      annotations: { readOnlyHint: true },
+    },
+    async (args) => {
+      const result = await checkMobile(args);
+      return {
+        content: [
+          { type: "text", text: JSON.stringify({ ...result, screenshotBase64: "(see image below)" }, null, 2) },
+          {
+            type: "image",
+            data: result.screenshotBase64,
+            mimeType: result.screenshotMimeType,
+          },
+        ],
+      };
+    }
+  );
+
+  // Tool: check_structured_data
+  server.registerTool(
+    "check_structured_data",
+    {
+      title: "Check Structured Data",
+      description:
+        "Extract and validate structured data from a web page: JSON-LD (with type-specific validation for Product, Organization, BreadcrumbList, Article), Microdata, Open Graph, and Twitter Card meta tags.",
+      inputSchema: checkStructuredDataSchema,
+      annotations: { readOnlyHint: true },
+    },
+    async (args) => {
+      const result = await checkStructuredData(args);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };
     }
   );

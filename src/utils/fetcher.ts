@@ -17,9 +17,6 @@ export interface FetchResult {
   fetchedWith: "fetch" | "puppeteer";
 }
 
-// ---------------------------------------------------------------------------
-// Realistic User-Agent rotation
-// ---------------------------------------------------------------------------
 const USER_AGENTS = [
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
@@ -34,9 +31,6 @@ function randomUserAgent(): string {
   return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
 }
 
-// ---------------------------------------------------------------------------
-// Jitter: adds ±30% random variance to a delay value
-// ---------------------------------------------------------------------------
 export function jitter(ms: number): number {
   if (ms <= 0) return 0;
   const variance = ms * 0.3;
@@ -46,9 +40,6 @@ export function jitter(ms: number): number {
 export const sleep = (ms: number) =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
-// ---------------------------------------------------------------------------
-// Build realistic browser-like headers
-// ---------------------------------------------------------------------------
 function buildHeaders(
   userHeaders: Record<string, string> = {}
 ): Record<string, string> {
@@ -69,9 +60,6 @@ function buildHeaders(
   };
 }
 
-// ---------------------------------------------------------------------------
-// Detect if a response looks like an anti-bot block
-// ---------------------------------------------------------------------------
 const BLOCK_STATUS_CODES = new Set([403, 503]);
 
 function looksBlocked(status: number, body: string): boolean {
@@ -89,9 +77,6 @@ function looksBlocked(status: number, body: string): boolean {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Puppeteer fallback – fetch via headless browser
-// ---------------------------------------------------------------------------
 async function fetchWithPuppeteer(
   url: string,
   timeout: number
@@ -111,7 +96,6 @@ async function fetchWithPuppeteer(
 
     const page = await browser.newPage();
     await page.setUserAgent(randomUserAgent());
-    // Hide webdriver flag
     await page.evaluateOnNewDocument(() => {
       Object.defineProperty(navigator, "webdriver", { get: () => false });
     });
@@ -144,9 +128,6 @@ async function fetchWithPuppeteer(
   }
 }
 
-// ---------------------------------------------------------------------------
-// Main fetch function with anti-bot fallback
-// ---------------------------------------------------------------------------
 const DEFAULT_TIMEOUT = 15000;
 const DEFAULT_MAX_RETRIES = 2;
 
@@ -184,7 +165,6 @@ export async function fetchUrl(
         responseHeaders[key] = value;
       });
 
-      // Detect anti-bot block → fallback to Puppeteer
       if (usePuppeteerFallback && looksBlocked(response.status, body)) {
         console.error(
           `Anti-bot block detected on ${url} (status ${response.status}), falling back to Puppeteer`
@@ -210,7 +190,6 @@ export async function fetchUrl(
     }
   }
 
-  // Last resort: try Puppeteer if fetch completely failed
   if (usePuppeteerFallback) {
     try {
       console.error(
@@ -227,9 +206,6 @@ export async function fetchUrl(
   );
 }
 
-// ---------------------------------------------------------------------------
-// Lightweight HEAD check for link validation
-// ---------------------------------------------------------------------------
 export async function checkUrl(
   url: string,
   timeout: number = 5000
@@ -247,7 +223,6 @@ export async function checkUrl(
 
     clearTimeout(timeoutId);
 
-    // Some servers block HEAD → retry with GET
     if (response.status === 405 || response.status === 403) {
       clearTimeout(timeoutId);
       const controller2 = new AbortController();
@@ -259,7 +234,6 @@ export async function checkUrl(
         redirect: "follow",
       });
       clearTimeout(timeoutId2);
-      // Consume body to free resources
       await getResponse.text();
       return {
         status: getResponse.status,
