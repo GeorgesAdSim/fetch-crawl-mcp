@@ -1,6 +1,6 @@
-# Fetch Crawl MCP v3.0.0
+# Fetch Crawl MCP v3.1.0
 
-Serveur MCP (Model Context Protocol) pour fetcher, crawler et analyser des sites web. 16 outils utilisables depuis Claude Code, Claude Desktop, ou tout client MCP compatible.
+Serveur MCP (Model Context Protocol) pour fetcher, crawler et analyser des sites web. 17 outils utilisables depuis Claude Code, Claude Desktop, ou tout client MCP compatible.
 
 ## Installation
 
@@ -66,7 +66,16 @@ Tous les outils retournent un format `StandardResponse` unifié :
 }
 ```
 
-## Outils (16)
+## Anti-Bot Detection
+
+Le fetcher intègre un système de détection anti-bot avancé :
+
+- **Détection automatique** : Cloudflare, DataDome, Akamai, Sucuri, PerimeterX
+- **Stealth Puppeteer** : patches navigator.webdriver, plugins, languages, platform, hardwareConcurrency, deviceMemory, chrome.runtime, Notification permissions, WebGL renderer
+- **Fallback propre** : si le site reste bloqué même avec Puppeteer, retour d'un status 403 avec info `antiBot: { blocked, provider, confidence }` au lieu d'un crash
+- **Launch args optimisés** : `--disable-blink-features=AutomationControlled`, `--disable-features=IsolateOrigins,site-per-process`, `--window-size=1920,1080`
+
+## Outils (17)
 
 ### Fetching & Crawling
 
@@ -92,7 +101,7 @@ Crawle un site récursivement en suivant les liens internes.
 |-----------|------|--------|-------------|
 | `url` | string | *requis* | URL de départ |
 | `maxDepth` | number (0–10) | `2` | Profondeur max (0 = page de départ uniquement) |
-| `maxPages` | number (1–200) | `50` | Nombre max de pages |
+| `maxPages` | number (1–500) | `50` | Nombre max de pages |
 | `delay` | number (0–10000) | `300` | Délai en ms entre les requêtes (±30% jitter) |
 | `concurrency` | number (1–10) | `3` | Pages fetchées en parallèle |
 | `respectRobotsTxt` | boolean | `true` | Respecter robots.txt et Crawl-delay |
@@ -101,7 +110,9 @@ Crawle un site récursivement en suivant les liens internes.
 
 **Score** : basé sur le ratio de pages en erreur (status >= 400).
 
-**Retour** : liste des pages crawlées avec titre, status, profondeur, liens trouvés.
+**Timeout** : le crawl s'arrête proprement après 5 minutes (`abortedEarly: true`).
+
+**Retour** : liste des pages crawlées avec titre, status, profondeur, liens trouvés + `crawlStats: { startedAt, finishedAt, durationSeconds, pagesPerSecond, abortedEarly, abortReason }`.
 
 ---
 
@@ -222,6 +233,44 @@ Extrait tous les liens d'une page avec filtrage par type.
 | `type` | `"all"` \| `"internal"` \| `"external"` | `"all"` | Filtrer par type |
 
 **Retour** : liens uniques avec href, texte, rel, isInternal, isNofollow.
+
+---
+
+#### `extract_with_schema`
+
+Extraction structurée basée sur des sélecteurs CSS configurables, avec presets intégrés.
+
+| Paramètre | Type | Défaut | Description |
+|-----------|------|--------|-------------|
+| `url` | string | *requis* | URL source |
+| `schema` | object | — | Schema d'extraction (voir ci-dessous) |
+| `fallbackSelectors` | object | — | Sélecteurs de fallback si le principal échoue |
+| `preset` | `"ecommerce-product"` \| `"article"` \| `"local-business"` \| `"recipe"` | — | Preset intégré |
+
+**Schema** : chaque clé est un champ, la valeur est `{ selector, attribute?, multiple?, transform? }`.
+
+```json
+{
+  "productName": { "selector": "h1.product-title", "transform": "text" },
+  "price": { "selector": ".product-price .current", "transform": "number" },
+  "images": { "selector": ".product-gallery img", "attribute": "src", "multiple": true },
+  "description": { "selector": ".product-description", "transform": "html" }
+}
+```
+
+**Transforms** : `text` (innerText), `html` (innerHTML), `number` (parseFloat), `trim` (text trimmed), `href` (attribut href).
+
+**Presets intégrés** :
+- `ecommerce-product` : productName, price, oldPrice, currency, images, description, sku, brand, availability, breadcrumb, reviewsCount
+- `article` : title, author, publishDate, content, categories, tags, readingTime (auto-calculé)
+- `local-business` : name, address, phone, email, hours, coordinates, rating, reviewCount
+- `recipe` : title, prepTime, cookTime, servings, ingredients, instructions, calories, image
+
+Si `preset` ET `schema` sont fournis, le schema override les champs du preset.
+
+**Score** : `(fieldsFound / fieldsTotal) * 100`.
+
+**Retour** : `data.extracted` (données), `fieldsFound`, `fieldsTotal`, `fieldsMissing`, `usedFallback`, `preset`.
 
 ---
 
@@ -358,6 +407,7 @@ src/
 │   ├── check-robots-txt.ts          # check_robots_txt
 │   ├── extract-content.ts           # extract_content
 │   ├── extract-links.ts             # extract_links
+│   ├── extract-with-schema.ts       # extract_with_schema ✨ NEW
 │   ├── parse-sitemap.ts             # parse_sitemap
 │   ├── check-links.ts              # check_links
 │   ├── check-redirect-chain.ts     # check_redirect_chain
@@ -366,7 +416,7 @@ src/
 │   ├── compare-pages.ts            # compare_pages
 │   └── audit-site-batch.ts         # audit_site_batch
 └── utils/
-    ├── fetcher.ts                    # HTTP fetch + Puppeteer fallback + withPuppeteerTimeout
+    ├── fetcher.ts                    # HTTP fetch + stealth Puppeteer + anti-bot detection
     ├── html-parser.ts               # Cheerio-based HTML extraction
     ├── robots-parser.ts             # robots.txt parser
     ├── url-utils.ts                 # URL normalization utilities
@@ -379,7 +429,7 @@ src/
 - **Langage** : TypeScript (strict)
 - **MCP SDK** : @modelcontextprotocol/sdk
 - **HTML parsing** : Cheerio
-- **Browser automation** : Puppeteer
+- **Browser automation** : Puppeteer (stealth mode)
 - **Validation** : Zod
 - **Transport** : stdio (défaut) ou HTTP (Express + StreamableHTTPServerTransport)
 

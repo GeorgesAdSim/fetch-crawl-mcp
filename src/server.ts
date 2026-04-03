@@ -48,11 +48,15 @@ import {
   auditSiteBatchSchema,
   auditSiteBatch,
 } from "./tools/audit-site-batch.js";
+import {
+  extractWithSchemaSchema,
+  extractWithSchema,
+} from "./tools/extract-with-schema.js";
 
 export function createServer(): McpServer {
   const server = new McpServer({
     name: "fetch-crawl-mcp",
-    version: "2.0.0",
+    version: "3.1.0",
   });
 
   // Tool: fetch_page
@@ -358,6 +362,24 @@ export function createServer(): McpServer {
     },
     async (args) => {
       const result = await auditSiteBatch(args);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  // Tool: extract_with_schema
+  server.registerTool(
+    "extract_with_schema",
+    {
+      title: "Extract With Schema",
+      description:
+        "Extract structured data from a web page using configurable CSS selectors. Supports custom schemas and built-in presets (ecommerce-product, article, local-business, recipe). Each field defines a CSS selector, optional attribute, multiple flag, and transform (text, html, number, trim, href). Fallback selectors can be provided for resilience.",
+      inputSchema: extractWithSchemaSchema,
+      annotations: { readOnlyHint: true },
+    },
+    async (args) => {
+      const result = await extractWithSchema(args);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };

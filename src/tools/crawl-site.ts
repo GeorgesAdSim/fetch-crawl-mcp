@@ -26,7 +26,7 @@ export const crawlSiteSchema = {
     .number()
     .int()
     .min(1)
-    .max(200)
+    .max(500)
     .default(50)
     .describe("Maximum number of pages to crawl"),
   delay: z
@@ -70,6 +70,8 @@ interface CrawledPage {
   fetchedWith: "fetch" | "puppeteer";
   error?: string;
 }
+
+const CRAWL_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
 async function crawlOne(
   normalizedUrl: string,
@@ -153,6 +155,7 @@ export async function crawlSite({
   excludePattern?: string;
 }): Promise<StandardResponse> {
   const startTime = performance.now();
+  const startedAt = new Date().toISOString();
   const visited = new Set<string>();
   const results: CrawledPage[] = [];
   const queue: Array<{ url: string; depth: number }> = [
@@ -201,8 +204,18 @@ export async function crawlSite({
   }
 
   let isFirstBatch = true;
+  let abortedEarly = false;
+  let abortReason: string | undefined;
 
   while (queue.length > 0 && results.length < maxPages) {
+    // Check 5-minute timeout
+    const elapsed = performance.now() - startTime;
+    if (elapsed > CRAWL_TIMEOUT_MS) {
+      abortedEarly = true;
+      abortReason = "timeout 5min";
+      break;
+    }
+
     if (!isFirstBatch && delay > 0) {
       await sleep(jitter(delay));
     }
@@ -241,6 +254,13 @@ export async function crawlSite({
     }
   }
 
+  const finishedAt = new Date().toISOString();
+  const durationSeconds = Math.round((performance.now() - startTime) / 1000);
+  const pagesPerSecond =
+    durationSeconds > 0
+      ? Math.round((results.length / durationSeconds) * 100) / 100
+      : results.length;
+
   const maxDepthReached = results.length > 0
     ? Math.max(...results.map((r) => r.depth))
     : 0;
@@ -264,6 +284,14 @@ export async function crawlSite({
     }
   }
 
+  if (abortedEarly) {
+    issues.push(createIssue(
+      "warning",
+      "crawl-aborted",
+      `Crawl interrompu prématurément: ${abortReason}. ${results.length} pages crawlées sur ${maxPages} demandées.`
+    ));
+  }
+
   const errorPages = results.filter((r) => r.status >= 400).length;
   const errorRatio = results.length > 0 ? errorPages / results.length : 0;
   const score = Math.max(0, Math.round(100 - errorRatio * 100));
@@ -273,7 +301,7 @@ export async function crawlSite({
     finalUrl: url,
     status: results[0]?.status ?? 0,
     score,
-    summary: `Crawl de ${url}: ${results.length} pages trouvées, profondeur max ${maxDepthReached}`,
+    summary: `Crawl de ${url}: ${results.length} pages trouvées, profondeur max ${maxDepthReached}${abortedEarly ? ` (interrompu: ${abortReason})` : ""}`,
     issues,
     recommendations: generateRecommendations(issues),
     meta: createMeta(startTime, "fetch", false, false),
@@ -281,6 +309,14 @@ export async function crawlSite({
       startUrl: url,
       pagesFound: results.length,
       maxDepthReached,
+      crawlStats: {
+        startedAt,
+        finishedAt,
+        durationSeconds,
+        pagesPerSecond,
+        abortedEarly,
+        abortReason,
+      },
       robotsTxt: respectRobotsTxt
         ? {
             disallowedRules: disallowed.length,

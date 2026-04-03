@@ -26,7 +26,7 @@ async function startHttp() {
 
   // Health check
   app.get("/health", (_req, res) => {
-    res.json({ status: "ok", name: "fetch-crawl-mcp", version: "1.0.0" });
+    res.json({ status: "ok", name: "fetch-crawl-mcp", version: "3.1.0" });
   });
 
   // MCP endpoint
