@@ -20,21 +20,28 @@ async function startHttp() {
   const { StreamableHTTPServerTransport } = await import(
     "@modelcontextprotocol/sdk/server/streamableHttp.js"
   );
+  const { SSEServerTransport } = await import(
+    "@modelcontextprotocol/sdk/server/sse.js"
+  );
 
   const app = express();
   app.use(express.json());
+
+  // SSE session store
+  const sseTransports = new Map<string, InstanceType<typeof SSEServerTransport>>();
 
   // Health check
   app.get("/health", (_req, res) => {
     res.json({ status: "ok", name: "fetch-crawl-mcp", version: "4.0.0" });
   });
 
-  // MCP endpoint
+  // --- Streamable HTTP (stateless) ---
+
   app.post("/mcp", async (req, res) => {
     try {
       const server = createServer();
       const transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: undefined, // Stateless
+        sessionIdGenerator: undefined,
       });
       await server.connect(transport);
       await transport.handleRequest(req, res);
@@ -44,24 +51,69 @@ async function startHttp() {
     }
   });
 
-  // SSE not supported in stateless mode
   app.get("/mcp", (_req, res) => {
-    res
-      .status(405)
-      .json({ error: "SSE not supported in stateless mode" });
+    res.status(405).json({ error: "SSE not supported on /mcp. Use GET /sse instead." });
   });
 
-  // Session termination not supported in stateless mode
   app.delete("/mcp", (_req, res) => {
-    res
-      .status(405)
-      .json({ error: "Session termination not supported in stateless mode" });
+    res.status(405).json({ error: "Session termination not supported in stateless mode" });
+  });
+
+  // --- SSE transport (for Claude.ai connector) ---
+
+  app.get("/sse", async (_req, res) => {
+    try {
+      const server = createServer();
+      const transport = new SSEServerTransport("/messages", res);
+      const sessionId = transport.sessionId;
+
+      sseTransports.set(sessionId, transport);
+      console.log(`SSE session created: ${sessionId} (active: ${sseTransports.size})`);
+
+      res.on("close", () => {
+        sseTransports.delete(sessionId);
+        console.log(`SSE session closed: ${sessionId} (active: ${sseTransports.size})`);
+      });
+
+      await server.connect(transport);
+    } catch (error) {
+      console.error("Error creating SSE session:", error);
+      if (!res.headersSent) {
+        res.status(500).json({ error: "Failed to create SSE session" });
+      }
+    }
+  });
+
+  app.post("/messages", async (req, res) => {
+    const sessionId = req.query.sessionId as string | undefined;
+
+    if (!sessionId) {
+      res.status(400).json({ error: "Missing sessionId query parameter" });
+      return;
+    }
+
+    const transport = sseTransports.get(sessionId);
+    if (!transport) {
+      res.status(404).json({ error: "Session not found. It may have expired." });
+      return;
+    }
+
+    try {
+      await transport.handlePostMessage(req, res);
+    } catch (error) {
+      console.error(`Error handling message for session ${sessionId}:`, error);
+      if (!res.headersSent) {
+        res.status(500).json({ error: "Failed to handle message" });
+      }
+    }
   });
 
   app.listen(port, () => {
     console.log(`Fetch Crawl MCP server running on http://localhost:${port}`);
-    console.log(`MCP endpoint: http://localhost:${port}/mcp`);
-    console.log(`Health check: http://localhost:${port}/health`);
+    console.log(`Streamable HTTP: POST http://localhost:${port}/mcp`);
+    console.log(`SSE endpoint:    GET  http://localhost:${port}/sse`);
+    console.log(`SSE messages:    POST http://localhost:${port}/messages`);
+    console.log(`Health check:    GET  http://localhost:${port}/health`);
   });
 }
 
