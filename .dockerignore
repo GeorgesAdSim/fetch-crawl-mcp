@@ -1,8 +1,6 @@
 node_modules
-src
-*.ts
-tsconfig.json
 .git
 .DS_Store
 *.md
 .mcp.json
+build
