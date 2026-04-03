@@ -1,6 +1,6 @@
 FROM node:22-slim
 
-# Puppeteer dependencies
+# Puppeteer/Chromium dependencies
 RUN apt-get update && apt-get install -y \
     chromium \
     fonts-liberation \
@@ -15,6 +15,7 @@ RUN apt-get update && apt-get install -y \
     libcairo2 \
     libasound2 \
     libcups2 \
+    curl \
     --no-install-recommends && \
     rm -rf /var/lib/apt/lists/*
 
@@ -28,4 +29,5 @@ RUN npm ci --omit=dev
 COPY build/ ./build/
 
 EXPOSE 3001
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 CMD curl -f http://localhost:3001/health || exit 1
 CMD ["node", "build/index.js", "--http"]
