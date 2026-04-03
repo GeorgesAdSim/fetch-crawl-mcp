@@ -2,6 +2,12 @@ import { z } from "zod";
 import * as cheerio from "cheerio";
 import { fetchUrl } from "../utils/fetcher.js";
 import { getSitemapUrl } from "../utils/url-utils.js";
+import {
+  type StandardResponse,
+  createMeta,
+  createIssue,
+  generateRecommendations,
+} from "../utils/response.js";
 
 export const parseSitemapSchema = {
   url: z
@@ -56,7 +62,9 @@ async function parseSingleSitemap(url: string): Promise<{
   return { entries, sitemapIndexUrls: [] };
 }
 
-export async function parseSitemap({ url }: { url: string }) {
+export async function parseSitemap({ url }: { url: string }): Promise<StandardResponse> {
+  const startTime = performance.now();
+
   let sitemapUrl = url;
   if (!url.includes("sitemap") && !url.endsWith(".xml")) {
     sitemapUrl = getSitemapUrl(url);
@@ -85,12 +93,43 @@ export async function parseSitemap({ url }: { url: string }) {
     }
   }
 
+  const truncated = allEntries.length > 500;
+
+  // Build issues
+  const issues = [];
+
+  for (const err of errors) {
+    issues.push(createIssue("error", "sitemap-parse", `Failed to parse ${err.url}: ${err.error}`, err.url));
+  }
+
+  if (truncated) {
+    issues.push(createIssue("warning", "sitemap-truncated", `Results truncated: ${allEntries.length} URLs found, returning first 500`));
+  }
+
+  issues.push(createIssue("info", "sitemap-processed", `${processedSitemaps.length} sitemap(s) processed`));
+
+  // Score: 100 base, -20 per error, -5 if truncated
+  let score = 100;
+  score -= errors.length * 20;
+  if (truncated) score -= 5;
+  score = Math.max(0, score);
+
   return {
-    sitemapUrl,
-    sitemapsProcessed: processedSitemaps.length,
-    totalUrls: allEntries.length,
-    entries: allEntries.slice(0, 500),
-    errors: errors.length > 0 ? errors : undefined,
-    truncated: allEntries.length > 500,
+    url,
+    finalUrl: sitemapUrl,
+    status: errors.length === processedSitemaps.length ? 0 : 200,
+    score,
+    summary: `Sitemap de ${url}: ${allEntries.length} URLs dans ${processedSitemaps.length} sitemaps`,
+    issues,
+    recommendations: generateRecommendations(issues),
+    meta: createMeta(startTime, "fetch", false, false),
+    data: {
+      sitemapUrl,
+      sitemapsProcessed: processedSitemaps.length,
+      totalUrls: allEntries.length,
+      entries: allEntries.slice(0, 500),
+      errors: errors.length > 0 ? errors : undefined,
+      truncated,
+    },
   };
 }

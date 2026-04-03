@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { fetchUrl, checkUrl, jitter, sleep } from "../utils/fetcher.js";
 import { extractLinks } from "../utils/html-parser.js";
+import {
+  type StandardResponse,
+  createMeta,
+  createIssue,
+  generateRecommendations,
+} from "../utils/response.js";
 
 export const checkLinksSchema = {
   url: z.string().url().describe("The URL to check links on"),
@@ -51,7 +57,8 @@ export async function checkLinks({
   timeout: number;
   concurrency: number;
   delay: number;
-}) {
+}): Promise<StandardResponse> {
+  const startTime = performance.now();
   const result = await fetchUrl(url);
   const links = extractLinks(result.body, result.finalUrl);
 
@@ -92,27 +99,64 @@ export async function checkLinks({
     (r) => r.ok && r.finalUrl !== r.url
   );
 
+  // Build issues
+  const issues = [];
+
+  for (const b of broken) {
+    issues.push(createIssue(
+      "error",
+      "broken-link",
+      `Broken link: ${b.url} (status ${b.status}${b.error ? `, ${b.error}` : ""})`,
+      b.text
+    ));
+  }
+
+  if (redirected.length > 5) {
+    issues.push(createIssue(
+      "warning",
+      "redirects",
+      `${redirected.length} links redirect to a different URL — consider updating to final URLs`
+    ));
+  }
+
+  // Score: 100 if no broken, deduct proportionally
+  const brokenRatio = results.length > 0 ? broken.length / results.length : 0;
+  const score = Math.max(0, Math.round(100 - brokenRatio * 100));
+
   return {
     url: result.url,
     finalUrl: result.finalUrl,
-    totalLinks: results.length,
-    okCount: results.filter((r) => r.ok && r.finalUrl === r.url).length,
-    brokenCount: broken.length,
-    redirectCount: redirected.length,
-    broken: broken.map((r) => ({
-      url: r.url,
-      text: r.text,
-      status: r.status,
-      isInternal: r.isInternal,
-      error: r.error,
-    })),
-    redirected: redirected.slice(0, 20).map((r) => ({
-      url: r.url,
-      text: r.text,
-      status: r.status,
-      finalUrl: r.finalUrl,
-      isInternal: r.isInternal,
-    })),
-    allLinks: results,
+    status: result.status,
+    score,
+    summary: `Vérification des liens de ${url}: ${broken.length} cassés sur ${results.length}`,
+    issues,
+    recommendations: generateRecommendations(issues),
+    meta: createMeta(
+      startTime,
+      result.fetchedWith,
+      result.fetchedWith === "puppeteer",
+      result.partial
+    ),
+    data: {
+      totalLinks: results.length,
+      okCount: results.filter((r) => r.ok && r.finalUrl === r.url).length,
+      brokenCount: broken.length,
+      redirectCount: redirected.length,
+      broken: broken.map((r) => ({
+        url: r.url,
+        text: r.text,
+        status: r.status,
+        isInternal: r.isInternal,
+        error: r.error,
+      })),
+      redirected: redirected.slice(0, 20).map((r) => ({
+        url: r.url,
+        text: r.text,
+        status: r.status,
+        finalUrl: r.finalUrl,
+        isInternal: r.isInternal,
+      })),
+      allLinks: results,
+    },
   };
 }

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Page } from "puppeteer";
+import { withPuppeteerTimeout } from "../utils/fetcher.js";
 
 export const screenshotSchema = {
   url: z.string().url().describe("The URL to capture"),
@@ -94,6 +95,8 @@ async function dismissCookieBanners(page: Page): Promise<void> {
   }
 }
 
+const MAX_IMAGE_SIZE = 900 * 1024; // 900KB
+
 export async function screenshot({
   url,
   width,
@@ -113,57 +116,95 @@ export async function screenshot({
   waitForSelector?: string;
   dismissCookies: boolean;
 }) {
-  const puppeteer = await import("puppeteer");
+  const startTime = performance.now();
 
-  let browser;
   try {
-    browser = await puppeteer.default.launch({
-      headless: true,
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-      ],
-    });
+    return await withPuppeteerTimeout(async () => {
+      const puppeteer = await import("puppeteer");
 
-    const page = await browser.newPage();
-    await page.setViewport({ width, height });
-    await page.goto(url, {
-      waitUntil: "networkidle2",
-      timeout: 30000,
-    });
+      let browser;
+      try {
+        browser = await puppeteer.default.launch({
+          headless: true,
+          args: [
+            "--no-sandbox",
+            "--disable-setuid-sandbox",
+            "--disable-dev-shm-usage",
+          ],
+        });
 
-    if (waitForSelector) {
-      await page.waitForSelector(waitForSelector, {
-        visible: true,
-        timeout: 10000,
-      });
-    }
+        const page = await browser.newPage();
+        await page.setViewport({ width, height });
+        await page.goto(url, {
+          waitUntil: "networkidle2",
+          timeout: 30000,
+        });
 
-    if (dismissCookies) {
-      await dismissCookieBanners(page);
-      await new Promise((r) => setTimeout(r, 500));
-    }
+        if (waitForSelector) {
+          await page.waitForSelector(waitForSelector, {
+            visible: true,
+            timeout: 10000,
+          });
+        }
 
-    const imageBuffer =
-      format === "jpeg"
-        ? await page.screenshot({ fullPage, type: "jpeg", quality })
-        : await page.screenshot({ fullPage, type: "png" });
-    const base64 = Buffer.from(imageBuffer).toString("base64");
-    const mimeType = format === "jpeg" ? "image/jpeg" : "image/png";
+        if (dismissCookies) {
+          await dismissCookieBanners(page);
+          await new Promise((r) => setTimeout(r, 500));
+        }
 
+        let imageBuffer: Uint8Array;
+        let finalFormat = format;
+        let finalMimeType: string;
+
+        if (format === "jpeg") {
+          imageBuffer = await page.screenshot({ fullPage, type: "jpeg", quality });
+        } else {
+          imageBuffer = await page.screenshot({ fullPage, type: "png" });
+        }
+
+        // Auto-recompress if fullPage PNG exceeds 900KB
+        if (fullPage && imageBuffer.length > MAX_IMAGE_SIZE && format === "png") {
+          imageBuffer = await page.screenshot({ fullPage, type: "jpeg", quality: 60 });
+          finalFormat = "jpeg";
+        }
+
+        finalMimeType = finalFormat === "jpeg" ? "image/jpeg" : "image/png";
+        const base64 = Buffer.from(imageBuffer).toString("base64");
+
+        return {
+          url,
+          width,
+          height,
+          fullPage,
+          format: finalFormat,
+          imageBase64: base64,
+          mimeType: finalMimeType,
+          meta: {
+            durationMs: Math.round(performance.now() - startTime),
+            timestamp: new Date().toISOString(),
+          },
+        };
+      } finally {
+        if (browser) {
+          await browser.close();
+        }
+      }
+    }, 45000);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
     return {
       url,
       width,
       height,
       fullPage,
       format,
-      imageBase64: base64,
-      mimeType,
+      imageBase64: "",
+      mimeType: format === "jpeg" ? "image/jpeg" : "image/png",
+      error: `Screenshot failed: ${message}`,
+      meta: {
+        durationMs: Math.round(performance.now() - startTime),
+        timestamp: new Date().toISOString(),
+      },
     };
-  } finally {
-    if (browser) {
-      await browser.close();
-    }
   }
 }

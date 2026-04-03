@@ -32,11 +32,27 @@ import {
   checkStructuredDataSchema,
   checkStructuredData,
 } from "./tools/check-structured-data.js";
+import {
+  checkRobotsTxtSchema,
+  checkRobotsTxt,
+} from "./tools/check-robots-txt.js";
+import {
+  checkIndexabilitySchema,
+  checkIndexability,
+} from "./tools/check-indexability.js";
+import {
+  comparePagesSchema,
+  comparePages,
+} from "./tools/compare-pages.js";
+import {
+  auditSiteBatchSchema,
+  auditSiteBatch,
+} from "./tools/audit-site-batch.js";
 
 export function createServer(): McpServer {
   const server = new McpServer({
     name: "fetch-crawl-mcp",
-    version: "1.0.0",
+    version: "2.0.0",
   });
 
   // Tool: fetch_page
@@ -176,6 +192,11 @@ export function createServer(): McpServer {
     },
     async (args) => {
       const result = await screenshot(args);
+      if ("error" in result) {
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
       return {
         content: [
           {
@@ -236,13 +257,17 @@ export function createServer(): McpServer {
     },
     async (args) => {
       const result = await checkMobile(args);
+      const mobileData = result.data as Record<string, unknown>;
+      const screenshotBase64 = mobileData.screenshotBase64 as string;
+      const screenshotMimeType = mobileData.screenshotMimeType as string;
+      const jsonResult = { ...result, data: { ...mobileData, screenshotBase64: "(see image below)" } };
       return {
         content: [
-          { type: "text", text: JSON.stringify({ ...result, screenshotBase64: "(see image below)" }, null, 2) },
+          { type: "text", text: JSON.stringify(jsonResult, null, 2) },
           {
             type: "image",
-            data: result.screenshotBase64,
-            mimeType: result.screenshotMimeType,
+            data: screenshotBase64,
+            mimeType: screenshotMimeType,
           },
         ],
       };
@@ -261,6 +286,78 @@ export function createServer(): McpServer {
     },
     async (args) => {
       const result = await checkStructuredData(args);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  // Tool: check_robots_txt
+  server.registerTool(
+    "check_robots_txt",
+    {
+      title: "Check Robots.txt",
+      description:
+        "Analyze a site's robots.txt: parse rules per User-Agent (Allow/Disallow), Crawl-delay, declared sitemaps, and cross-check sitemap accessibility. Detects undeclared sitemaps and inconsistencies.",
+      inputSchema: checkRobotsTxtSchema,
+      annotations: { readOnlyHint: true },
+    },
+    async (args) => {
+      const result = await checkRobotsTxt(args);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  // Tool: check_indexability
+  server.registerTool(
+    "check_indexability",
+    {
+      title: "Check Indexability",
+      description:
+        "Check if a page is indexable by search engines. Analyzes HTTP status, meta robots, X-Robots-Tag, canonical tag, hreflang, and sitemap presence. Returns a verdict with detailed reasoning.",
+      inputSchema: checkIndexabilitySchema,
+      annotations: { readOnlyHint: true },
+    },
+    async (args) => {
+      const result = await checkIndexability(args);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  // Tool: compare_pages
+  server.registerTool(
+    "compare_pages",
+    {
+      title: "Compare Pages",
+      description:
+        "Compare two web pages side by side on SEO criteria: title, meta description, headings, word count, links, images alt, Open Graph, Twitter Card, JSON-LD, and canonical. Optionally captures screenshots of both pages.",
+      inputSchema: comparePagesSchema,
+      annotations: { readOnlyHint: true },
+    },
+    async (args) => {
+      const result = await comparePages(args);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  // Tool: audit_site_batch
+  server.registerTool(
+    "audit_site_batch",
+    {
+      title: "Audit Site Batch",
+      description:
+        "Batch audit multiple pages of a site. Collects URLs from sitemap, crawl, or a provided list, then runs a lightweight SEO audit on each page. Returns aggregate scores, top problems, quick wins, and critical pages.",
+      inputSchema: auditSiteBatchSchema,
+      annotations: { readOnlyHint: true },
+    },
+    async (args) => {
+      const result = await auditSiteBatch(args);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };

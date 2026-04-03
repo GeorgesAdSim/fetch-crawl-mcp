@@ -1,17 +1,16 @@
 import { z } from "zod";
 import { fetchUrl } from "../utils/fetcher.js";
 import * as cheerio from "cheerio";
+import {
+  type StandardResponse,
+  createMeta,
+  createIssue,
+  generateRecommendations,
+} from "../utils/response.js";
 
 export const checkStructuredDataSchema = {
   url: z.string().url().describe("The URL to extract structured data from"),
 };
-
-type Severity = "error" | "warning" | "info";
-
-interface Issue {
-  severity: Severity;
-  message: string;
-}
 
 interface JsonLdResult {
   raw: unknown;
@@ -98,7 +97,8 @@ function validateJsonLd(data: unknown): JsonLdResult {
   };
 }
 
-export async function checkStructuredData({ url }: { url: string }) {
+export async function checkStructuredData({ url }: { url: string }): Promise<StandardResponse> {
+  const startTime = performance.now();
   const fetchResult = await fetchUrl(url);
   const $ = cheerio.load(fetchResult.body);
 
@@ -109,7 +109,6 @@ export async function checkStructuredData({ url }: { url: string }) {
     if (!text) return;
     try {
       const parsed = JSON.parse(text);
-      // Handle @graph arrays
       if (Array.isArray(parsed)) {
         for (const item of parsed) {
           jsonLdResults.push(validateJsonLd(item));
@@ -169,59 +168,70 @@ export async function checkStructuredData({ url }: { url: string }) {
   });
 
   // Build issues
-  const issues: Issue[] = [];
+  const issues = [];
+  const hasOg = Object.keys(openGraph).length > 0;
+  const hasTwitter = Object.keys(twitterCard).length > 0;
 
   if (jsonLdResults.length === 0) {
-    issues.push({
-      severity: "warning",
-      message: "No JSON-LD structured data found on the page.",
-    });
+    issues.push(createIssue("warning", "json-ld", "No JSON-LD structured data found on the page."));
   }
 
   for (const result of jsonLdResults) {
     if (!result.valid) {
       for (const err of result.errors) {
-        issues.push({
-          severity: "error",
-          message: `JSON-LD${result.type ? ` (${result.type})` : ""}: ${err}`,
-        });
+        issues.push(createIssue("error", "json-ld", `JSON-LD${result.type ? ` (${result.type})` : ""}: ${err}`, result.type ?? undefined));
       }
     } else {
-      issues.push({
-        severity: "info",
-        message: `JSON-LD "${result.type}" is valid.`,
-      });
+      issues.push(createIssue("info", "json-ld", `JSON-LD "${result.type}" is valid.`));
     }
   }
 
-  if (Object.keys(openGraph).length === 0) {
-    issues.push({
-      severity: "warning",
-      message: "No Open Graph meta tags found.",
-    });
+  if (!hasOg) {
+    issues.push(createIssue("warning", "open-graph", "No Open Graph meta tags found."));
   }
 
-  if (Object.keys(twitterCard).length === 0) {
-    issues.push({
-      severity: "warning",
-      message: "No Twitter Card meta tags found.",
-    });
+  if (!hasTwitter) {
+    issues.push(createIssue("warning", "twitter-card", "No Twitter Card meta tags found."));
   }
 
+  // Score
   const validCount = jsonLdResults.filter((r) => r.valid).length;
   const invalidCount = jsonLdResults.filter((r) => !r.valid).length;
 
+  let score = 100;
+  if (jsonLdResults.length === 0) score -= 20;
+  if (!hasOg) score -= 10;
+  if (!hasTwitter) score -= 10;
+  score -= invalidCount * 15;
+  score = Math.max(0, score);
+
+  const ogLabel = hasOg ? "oui" : "non";
+  const twitterLabel = hasTwitter ? "oui" : "non";
+
   return {
     url,
-    jsonLd: jsonLdResults,
-    microdata,
-    openGraph,
-    twitterCard,
+    finalUrl: fetchResult.finalUrl,
+    status: fetchResult.status,
+    score,
+    summary: `Données structurées de ${url}: ${jsonLdResults.length} schemas (${validCount} valides), OG: ${ogLabel}, Twitter: ${twitterLabel}`,
     issues,
-    summary: {
-      totalSchemas: jsonLdResults.length,
-      validCount,
-      invalidCount,
+    recommendations: generateRecommendations(issues),
+    meta: createMeta(
+      startTime,
+      fetchResult.fetchedWith,
+      fetchResult.fetchedWith === "puppeteer",
+      fetchResult.partial
+    ),
+    data: {
+      jsonLd: jsonLdResults,
+      microdata,
+      openGraph,
+      twitterCard,
+      summary: {
+        totalSchemas: jsonLdResults.length,
+        validCount,
+        invalidCount,
+      },
     },
   };
 }

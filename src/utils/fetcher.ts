@@ -15,7 +15,11 @@ export interface FetchResult {
   body: string;
   redirected: boolean;
   fetchedWith: "fetch" | "puppeteer";
+  durationMs: number;
+  partial: boolean;
 }
+
+const MAX_BODY_SIZE = 5 * 1024 * 1024; // 5MB
 
 const USER_AGENTS = [
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
@@ -77,10 +81,13 @@ function looksBlocked(status: number, body: string): boolean {
   );
 }
 
+const PUPPETEER_GLOBAL_TIMEOUT = 30000;
+
 async function fetchWithPuppeteer(
   url: string,
   timeout: number
 ): Promise<FetchResult> {
+  const startTime = performance.now();
   const puppeteer = await import("puppeteer");
   let browser;
   try {
@@ -100,12 +107,20 @@ async function fetchWithPuppeteer(
       Object.defineProperty(navigator, "webdriver", { get: () => false });
     });
 
+    const effectiveTimeout = Math.min(timeout, PUPPETEER_GLOBAL_TIMEOUT);
+
     const response = await page.goto(url, {
       waitUntil: "networkidle2",
-      timeout,
+      timeout: effectiveTimeout,
     });
 
-    const body = await page.content();
+    let body = await page.content();
+    let partial = false;
+    if (body.length > MAX_BODY_SIZE) {
+      body = body.slice(0, MAX_BODY_SIZE);
+      partial = true;
+    }
+
     const status = response?.status() ?? 0;
     const responseHeaders: Record<string, string> = {};
     const rawHeaders = response?.headers() ?? {};
@@ -122,9 +137,30 @@ async function fetchWithPuppeteer(
       body,
       redirected: page.url() !== url,
       fetchedWith: "puppeteer",
+      durationMs: Math.round(performance.now() - startTime),
+      partial,
     };
   } finally {
     if (browser) await browser.close();
+  }
+}
+
+export async function withPuppeteerTimeout<T>(
+  fn: () => Promise<T>,
+  timeoutMs: number = PUPPETEER_GLOBAL_TIMEOUT
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  const timeoutPromise = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`Puppeteer operation timed out after ${timeoutMs}ms`)),
+      timeoutMs
+    );
+  });
+
+  try {
+    return await Promise.race([fn(), timeoutPromise]);
+  } finally {
+    clearTimeout(timer!);
   }
 }
 
@@ -143,6 +179,7 @@ export async function fetchUrl(
     usePuppeteerFallback = true,
   } = options;
 
+  const startTime = performance.now();
   const requestHeaders = buildHeaders(headers);
   let lastError: Error | null = null;
 
@@ -159,7 +196,13 @@ export async function fetchUrl(
 
       clearTimeout(timeoutId);
 
-      const body = await response.text();
+      let body = await response.text();
+      let partial = false;
+      if (body.length > MAX_BODY_SIZE) {
+        body = body.slice(0, MAX_BODY_SIZE);
+        partial = true;
+      }
+
       const responseHeaders: Record<string, string> = {};
       response.headers.forEach((value, key) => {
         responseHeaders[key] = value;
@@ -181,6 +224,8 @@ export async function fetchUrl(
         body,
         redirected: response.redirected,
         fetchedWith: "fetch",
+        durationMs: Math.round(performance.now() - startTime),
+        partial,
       };
     } catch (error) {
       lastError = error as Error;

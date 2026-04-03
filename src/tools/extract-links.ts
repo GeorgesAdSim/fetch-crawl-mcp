@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { fetchUrl } from "../utils/fetcher.js";
 import { extractLinks as parseLinks } from "../utils/html-parser.js";
+import {
+  type StandardResponse,
+  createMeta,
+} from "../utils/response.js";
 
 export const extractLinksSchema = {
   url: z.string().url().describe("The URL to extract links from"),
@@ -16,7 +20,8 @@ export async function extractLinks({
 }: {
   url: string;
   type: "all" | "internal" | "external";
-}) {
+}): Promise<StandardResponse> {
+  const startTime = performance.now();
   const result = await fetchUrl(url);
   let links = parseLinks(result.body, result.finalUrl);
 
@@ -39,15 +44,27 @@ export async function extractLinks({
   return {
     url: result.url,
     finalUrl: result.finalUrl,
-    filter: type,
-    totalLinks: links.length,
-    uniqueLinks: uniqueLinks.length,
-    links: uniqueLinks.map((l) => ({
-      href: l.href,
-      text: l.text || "[no text]",
-      rel: l.rel,
-      isInternal: l.isInternal,
-      isNofollow: l.isNofollow,
-    })),
+    status: result.status,
+    summary: `Extraction des liens de ${result.finalUrl}: ${uniqueLinks.length} liens uniques (${type})`,
+    issues: [],
+    recommendations: [],
+    meta: createMeta(
+      startTime,
+      result.fetchedWith,
+      result.fetchedWith === "puppeteer",
+      result.partial
+    ),
+    data: {
+      filter: type,
+      totalLinks: links.length,
+      uniqueLinks: uniqueLinks.length,
+      links: uniqueLinks.map((l) => ({
+        href: l.href,
+        text: l.text || "[no text]",
+        rel: l.rel,
+        isInternal: l.isInternal,
+        isNofollow: l.isNofollow,
+      })),
+    },
   };
 }

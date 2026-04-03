@@ -1,6 +1,6 @@
-# fetch-crawl-mcp
+# Fetch Crawl MCP v3.0.0
 
-MCP server for fetching, crawling, and analyzing websites. Provides 14 tools for web content extraction, SEO auditing, performance measurement, and more.
+Serveur MCP (Model Context Protocol) pour fetcher, crawler et analyser des sites web. 16 outils utilisables depuis Claude Code, Claude Desktop, ou tout client MCP compatible.
 
 ## Installation
 
@@ -9,13 +9,15 @@ npm install
 npm run build
 ```
 
-## Usage
+Puppeteer est requis pour les outils `screenshot`, `check_performance`, `check_mobile` et le fallback anti-bot. Chromium s'installe automatiquement lors du `npm install`.
 
-### Stdio (default)
+## Utilisation
+
+### Stdio (défaut)
 
 ```bash
 npm start
-# or
+# ou
 node build/index.js
 ```
 
@@ -23,11 +25,11 @@ node build/index.js
 
 ```bash
 npm run start:http
-# or
+# ou
 node build/index.js --http --port 3001
 ```
 
-### MCP client configuration
+### Configuration client MCP
 
 ```json
 {
@@ -40,173 +42,356 @@ node build/index.js --http --port 3001
 }
 ```
 
-## Tools (14)
+## Format de réponse standard
 
-### 1. `fetch_page`
+Tous les outils retournent un format `StandardResponse` unifié :
 
-Fetch a web page and return its content in the specified format.
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `url` | string | *required* | The URL to fetch |
-| `format` | `"html"` \| `"text"` \| `"markdown"` | `"markdown"` | Output format |
-| `headers` | object | — | Optional custom HTTP headers |
-
-### 2. `crawl_site`
-
-Crawl a website recursively starting from a URL. Follows internal links up to a specified depth and max pages.
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `url` | string | *required* | The starting URL to crawl |
-| `maxDepth` | number (0–10) | `2` | Maximum crawl depth (0 = starting page only) |
-| `maxPages` | number (1–200) | `50` | Maximum number of pages to crawl |
-| `delay` | number (0–10000) | `300` | Base delay in ms between requests (±30% jitter) |
-| `concurrency` | number (1–10) | `3` | Pages to fetch in parallel |
-| `respectRobotsTxt` | boolean | `true` | Respect robots.txt rules and Crawl-delay |
-| `includePattern` | string | — | Regex: only crawl URLs matching this pattern |
-| `excludePattern` | string | — | Regex: skip URLs matching this pattern |
-
-### 3. `extract_content`
-
-Extract structured content from a web page: headings, paragraphs, images, links, and plain text with statistics.
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `url` | string | *required* | The URL to extract content from |
-
-### 4. `extract_links`
-
-Extract all links from a web page. Can filter by internal, external, or all links.
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `url` | string | *required* | The URL to extract links from |
-| `type` | `"all"` \| `"internal"` \| `"external"` | `"all"` | Filter links by type |
-
-### 5. `audit_onpage`
-
-Technical on-page HTML audit. Checks title tag, meta description, canonical, robots, lang, heading hierarchy, image alt attributes, Open Graph, Twitter Card, and JSON-LD structured data.
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `url` | string | *required* | The URL to audit |
-
-### 6. `parse_sitemap`
-
-Parse a sitemap.xml file (or auto-detect it from a website root). Supports sitemap index files.
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `url` | string | *required* | The sitemap.xml URL or website root URL |
-
-### 7. `check_links`
-
-Check all links on a web page for broken links (404, timeout, connection errors).
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `url` | string | *required* | The URL to check links on |
-| `timeout` | number (1000–30000) | `5000` | Timeout in ms for each link check |
-| `concurrency` | number (1–20) | `3` | Number of links to check simultaneously |
-| `delay` | number (0–5000) | `200` | Base delay in ms between batches (±30% jitter) |
-
-### 8. `screenshot`
-
-Capture a screenshot of a web page using a headless browser. Supports PNG/JPEG, custom viewport, full-page capture, waiting for a CSS selector, and cookie consent dismissal.
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `url` | string | *required* | The URL to capture |
-| `width` | number (320–3840) | `1280` | Viewport width in pixels |
-| `height` | number (240–2160) | `800` | Viewport height in pixels |
-| `fullPage` | boolean | `false` | Capture the full scrollable page |
-| `format` | `"png"` \| `"jpeg"` | `"png"` | Image format |
-| `quality` | number (1–100) | `80` | Image quality (only used for jpeg) |
-| `waitForSelector` | string | — | CSS selector to wait for before capturing |
-| `dismissCookies` | boolean | `false` | Attempt to dismiss cookie consent banners before capturing |
-
-### 9. `check_performance`
-
-Measure web page performance metrics using a headless browser. Supports mobile (with network throttling) and desktop profiles.
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `url` | string | *required* | The URL to audit |
-| `device` | `"mobile"` \| `"desktop"` | `"mobile"` | Device profile (mobile: 375x812 + throttled, desktop: 1280x800) |
-
-**Metrics returned:** TTFB, FCP, LCP, DOM Content Loaded, Fully Loaded, total requests, total bytes transferred, resource counts by type (scripts, styles, images, fonts, other).
-
-**Scoring (0–100):** Based on Web Vitals thresholds — LCP (40% weight), FCP (35%), TTFB (25%). Issues are returned with `error`/`warning`/`info` severity.
-
-### 10. `check_redirect_chain`
-
-Follow the redirect chain of a URL hop by hop. Detects redirect loops, long chains, and HTTP-to-HTTPS upgrades.
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `url` | string | *required* | The URL to follow redirects for |
-| `maxRedirects` | number (1–30) | `10` | Maximum number of redirects to follow |
-
-**Returns:** `chain[]` (each hop with url, status, Location header, Server header), `totalRedirects`, `finalUrl`, `finalStatus`, `hasLoop`, `issues[]`.
-
-### 11. `check_mobile`
-
-Audit a web page for mobile-friendliness using a headless browser with iPhone viewport (375x812) and mobile User-Agent.
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `url` | string | *required* | The URL to check |
-
-**Checks performed:**
-- Presence of `<meta name="viewport">` and its content
-- Horizontal scroll detection (content wider than viewport)
-- Small font sizes (elements with font-size < 12px)
-- Small tap targets (links/buttons smaller than 48x48px)
-
-**Returns:** Analysis results, `issues[]` with severity, and a mobile JPEG screenshot.
-
-### 12. `check_structured_data`
-
-Extract and validate structured data from a web page.
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `url` | string | *required* | The URL to extract structured data from |
-
-**Extracts:**
-- **JSON-LD** blocks (including `@graph` arrays) with type-specific validation:
-  - `Product` — name, image, description, offers, offers.price, offers.priceCurrency
-  - `Organization` / `LocalBusiness` — name, url, logo
-  - `BreadcrumbList` — itemListElement
-  - `Article` / `NewsArticle` / `BlogPosting` — headline, datePublished, author
-- **Microdata** (elements with itemscope/itemtype/itemprop)
-- **Open Graph** meta tags (og:*)
-- **Twitter Card** meta tags (twitter:*)
-
-**Returns:** `jsonLd[]`, `microdata[]`, `openGraph{}`, `twitterCard{}`, `issues[]`, `summary { totalSchemas, validCount, invalidCount }`.
-
-## Tool categories
-
-| Category | Tools |
-|----------|-------|
-| **Content** | `fetch_page`, `extract_content`, `extract_links` |
-| **Crawling** | `crawl_site`, `parse_sitemap` |
-| **SEO** | `audit_onpage`, `check_structured_data` |
-| **Technical** | `check_links`, `check_redirect_chain` |
-| **Performance** | `check_performance` |
-| **Mobile** | `check_mobile` |
-| **Visual** | `screenshot` |
-
-## Development
-
-```bash
-npm run dev      # Watch mode with tsx
-npm run build    # Build TypeScript
-npm start        # Run built server (stdio)
-npm run start:http  # Run built server (HTTP)
+```typescript
+{
+  url: string;           // URL demandée
+  finalUrl: string;      // URL finale (après redirections)
+  status: number;        // Code HTTP
+  score?: number;        // Score 0-100 (si applicable)
+  summary: string;       // Résumé en une phrase
+  issues: ToolIssue[];   // Problèmes détectés (severity, element, message, evidence?)
+  recommendations: [];   // Recommandations d'amélioration
+  meta: {
+    fetchedWith: "fetch" | "puppeteer";
+    fallbackUsed: boolean;
+    partial: boolean;     // true si le contenu a été tronqué (> 5MB)
+    durationMs: number;
+    timestamp: string;
+  };
+  data: {};              // Données spécifiques à l'outil
+}
 ```
 
-## License
+## Outils (16)
+
+### Fetching & Crawling
+
+#### `fetch_page`
+
+Récupère une page web et retourne son contenu dans le format spécifié.
+
+| Paramètre | Type | Défaut | Description |
+|-----------|------|--------|-------------|
+| `url` | string | *requis* | URL à fetcher |
+| `format` | `"html"` \| `"text"` \| `"markdown"` | `"markdown"` | Format de sortie |
+| `headers` | object | — | Headers HTTP personnalisés |
+
+**Retour** : contenu de la page, titre, description, type de contenu.
+
+---
+
+#### `crawl_site`
+
+Crawle un site récursivement en suivant les liens internes.
+
+| Paramètre | Type | Défaut | Description |
+|-----------|------|--------|-------------|
+| `url` | string | *requis* | URL de départ |
+| `maxDepth` | number (0–10) | `2` | Profondeur max (0 = page de départ uniquement) |
+| `maxPages` | number (1–200) | `50` | Nombre max de pages |
+| `delay` | number (0–10000) | `300` | Délai en ms entre les requêtes (±30% jitter) |
+| `concurrency` | number (1–10) | `3` | Pages fetchées en parallèle |
+| `respectRobotsTxt` | boolean | `true` | Respecter robots.txt et Crawl-delay |
+| `includePattern` | string | — | Regex : ne crawler que les URLs matchant |
+| `excludePattern` | string | — | Regex : exclure les URLs matchant |
+
+**Score** : basé sur le ratio de pages en erreur (status >= 400).
+
+**Retour** : liste des pages crawlées avec titre, status, profondeur, liens trouvés.
+
+---
+
+#### `screenshot`
+
+Capture une screenshot d'une page web via Puppeteer. Supporte PNG/JPEG, viewport personnalisé, capture pleine page, attente de sélecteur CSS, et fermeture des bannières cookies.
+
+| Paramètre | Type | Défaut | Description |
+|-----------|------|--------|-------------|
+| `url` | string | *requis* | URL à capturer |
+| `width` | number (320–3840) | `1280` | Largeur du viewport |
+| `height` | number (240–2160) | `800` | Hauteur du viewport |
+| `fullPage` | boolean | `false` | Capturer toute la page scrollable |
+| `format` | `"png"` \| `"jpeg"` | `"png"` | Format d'image |
+| `quality` | number (1–100) | `80` | Qualité (jpeg uniquement) |
+| `waitForSelector` | string | — | Sélecteur CSS à attendre avant capture |
+| `dismissCookies` | boolean | `false` | Tenter de fermer les bannières cookies |
+
+**Robustesse** : timeout global Puppeteer, auto-recompression JPEG si fullPage > 900KB, retour d'erreur propre en cas d'échec.
+
+---
+
+### SEO Audit
+
+#### `audit_onpage`
+
+Audit technique on-page complet : title, meta description, canonical, robots, lang, hiérarchie H1-H6, attributs alt des images, Open Graph, Twitter Card, JSON-LD.
+
+| Paramètre | Type | Défaut | Description |
+|-----------|------|--------|-------------|
+| `url` | string | *requis* | URL à auditer |
+
+**Score** : 0-100 basé sur les issues (error = -15pts, warning = -5pts).
+
+**Retour** : données SEO complètes dans `data{}`, issues avec severity, recommandations.
+
+---
+
+#### `check_indexability`
+
+Vérifie si une page est indexable par les moteurs de recherche.
+
+| Paramètre | Type | Défaut | Description |
+|-----------|------|--------|-------------|
+| `url` | string | *requis* | URL de la page |
+
+**Analyses** :
+- Status HTTP
+- Meta robots (noindex, nofollow, none, noarchive, nosnippet)
+- X-Robots-Tag HTTP header
+- Canonical (auto-référençante ? cross-domain ?)
+- Hreflang / rel alternate
+- Présence dans le sitemap
+
+**Score** : -40 noindex, -30 status != 200, -20 canonical elsewhere, -10 absent du sitemap.
+
+**Retour** : verdict `indexable: boolean` avec raison détaillée.
+
+---
+
+#### `check_structured_data`
+
+Extrait et valide les données structurées d'une page.
+
+| Paramètre | Type | Défaut | Description |
+|-----------|------|--------|-------------|
+| `url` | string | *requis* | URL à analyser |
+
+**Extraction** :
+- **JSON-LD** (incluant `@graph`) avec validation par type : Product, Organization, LocalBusiness, BreadcrumbList, Article, NewsArticle, BlogPosting
+- **Microdata** (itemscope/itemtype/itemprop)
+- **Open Graph** (og:*)
+- **Twitter Card** (twitter:*)
+
+**Score** : -20 si pas de JSON-LD, -10 si pas d'OG, -10 si pas de Twitter Card, -15 par schema invalide.
+
+---
+
+#### `check_robots_txt`
+
+Analyse le robots.txt d'un site et vérifie la cohérence des sitemaps.
+
+| Paramètre | Type | Défaut | Description |
+|-----------|------|--------|-------------|
+| `url` | string | *requis* | URL du site |
+
+**Analyses** :
+- Parse complet par User-Agent (Allow + Disallow)
+- Crawl-delay
+- Sitemaps déclarés vs réellement accessibles
+- Détection de sitemaps non déclarés (/sitemap.xml, /1_index_sitemap.xml)
+
+**Score** : -30 si absent, -15 si aucun sitemap déclaré, -10 par sitemap inaccessible ou non déclaré.
+
+---
+
+### Content Extraction
+
+#### `extract_content`
+
+Extrait le contenu structuré d'une page : headings, liens, images, texte brut avec statistiques.
+
+| Paramètre | Type | Défaut | Description |
+|-----------|------|--------|-------------|
+| `url` | string | *requis* | URL source |
+
+**Retour** : titre, description, lang, headings, liens (max 100), images (max 50), contenu texte (max 10000 chars), stats.
+
+---
+
+#### `extract_links`
+
+Extrait tous les liens d'une page avec filtrage par type.
+
+| Paramètre | Type | Défaut | Description |
+|-----------|------|--------|-------------|
+| `url` | string | *requis* | URL source |
+| `type` | `"all"` \| `"internal"` \| `"external"` | `"all"` | Filtrer par type |
+
+**Retour** : liens uniques avec href, texte, rel, isInternal, isNofollow.
+
+---
+
+#### `parse_sitemap`
+
+Parse un sitemap.xml (ou le détecte automatiquement). Supporte les sitemap index.
+
+| Paramètre | Type | Défaut | Description |
+|-----------|------|--------|-------------|
+| `url` | string | *requis* | URL du sitemap ou racine du site |
+
+**Score** : -20 par erreur de parsing, -5 si tronqué.
+
+**Retour** : entrées avec loc, lastmod, changefreq, priority (max 500).
+
+---
+
+### Technical Checks
+
+#### `check_links`
+
+Vérifie tous les liens d'une page pour détecter les liens cassés (404, timeout, erreurs).
+
+| Paramètre | Type | Défaut | Description |
+|-----------|------|--------|-------------|
+| `url` | string | *requis* | URL à vérifier |
+| `timeout` | number (1000–30000) | `5000` | Timeout par lien |
+| `concurrency` | number (1–20) | `3` | Liens vérifiés en parallèle |
+| `delay` | number (0–5000) | `200` | Délai entre les batchs (±30% jitter) |
+
+**Score** : basé sur le ratio liens cassés / total.
+
+---
+
+#### `check_redirect_chain`
+
+Suit la chaîne de redirections hop par hop.
+
+| Paramètre | Type | Défaut | Description |
+|-----------|------|--------|-------------|
+| `url` | string | *requis* | URL à suivre |
+| `maxRedirects` | number (1–30) | `10` | Nombre max de redirections |
+
+**Score** : 100 si 0-1 redirect, 80 si 2-3, 60 si > 3, 0 si boucle.
+
+**Détections** : boucles de redirection, chaînes longues (> 3), upgrades HTTP → HTTPS.
+
+---
+
+#### `check_performance`
+
+Mesure les métriques de performance via Puppeteer avec profil mobile ou desktop.
+
+| Paramètre | Type | Défaut | Description |
+|-----------|------|--------|-------------|
+| `url` | string | *requis* | URL à auditer |
+| `device` | `"mobile"` \| `"desktop"` | `"mobile"` | Profil (mobile: 375x812 + throttling, desktop: 1280x800) |
+
+**Métriques** : TTFB, FCP, LCP, DOM Content Loaded, Fully Loaded, requêtes réseau, bytes transférés, ressources par type.
+
+**Score (0-100)** : LCP (40%), FCP (35%), TTFB (25%) selon les seuils Web Vitals.
+
+---
+
+#### `check_mobile`
+
+Audit de compatibilité mobile via Puppeteer avec viewport iPhone (375x812).
+
+| Paramètre | Type | Défaut | Description |
+|-----------|------|--------|-------------|
+| `url` | string | *requis* | URL à vérifier |
+
+**Vérifications** : meta viewport, scroll horizontal, fonts < 12px, tap targets < 48px.
+
+**Score** : -30 si pas de viewport meta, -10 si scroll horizontal, -5 par tranche de 10 tap targets trop petits.
+
+**Retour** : analyse + screenshot JPEG mobile.
+
+---
+
+### Multi-Page & Comparison
+
+#### `compare_pages`
+
+Compare deux pages web côte à côte sur 12 critères SEO.
+
+| Paramètre | Type | Défaut | Description |
+|-----------|------|--------|-------------|
+| `urlA` | string | *requis* | Première URL |
+| `urlB` | string | *requis* | Deuxième URL |
+| `includeScreenshot` | boolean | `false` | Capturer une screenshot de chaque page |
+
+**Critères comparés** : title, meta description, H1, heading structure, word count, internal links, external links, images alt, Open Graph, Twitter Card, JSON-LD, canonical.
+
+**Retour** : score individuel par page (0-100), tableau comparatif avec winner par critère, screenshots optionnels.
+
+---
+
+#### `audit_site_batch`
+
+Audit batch de multiples pages d'un site avec agrégation des résultats.
+
+| Paramètre | Type | Défaut | Description |
+|-----------|------|--------|-------------|
+| `url` | string | *requis* | URL du site |
+| `source` | `"sitemap"` \| `"crawl"` \| `"urls"` | `"sitemap"` | Source des URLs |
+| `urls` | string[] | — | Liste d'URLs (si source = "urls") |
+| `limit` | number (1–50) | `20` | Nombre max de pages |
+| `concurrency` | number (1–5) | `2` | Pages auditées en parallèle |
+| `delay` | number (0–5000) | `500` | Délai entre les batchs |
+
+**Agrégation** :
+- Score moyen et médiane
+- Distribution (excellent / bon / moyen / mauvais)
+- Top 10 problèmes triés par fréquence
+- Quick wins (pages > 60 pts avec 1-2 fixes faciles)
+- Pages critiques (les 10 pires scores)
+
+---
+
+## Architecture
+
+```
+src/
+├── index.ts                          # Entry point (stdio + HTTP)
+├── server.ts                         # MCP server, tool registration
+├── tools/
+│   ├── fetch-page.ts                 # fetch_page
+│   ├── crawl-site.ts                 # crawl_site
+│   ├── screenshot.ts                 # screenshot
+│   ├── analyze-seo.ts               # audit_onpage
+│   ├── check-indexability.ts         # check_indexability
+│   ├── check-structured-data.ts     # check_structured_data
+│   ├── check-robots-txt.ts          # check_robots_txt
+│   ├── extract-content.ts           # extract_content
+│   ├── extract-links.ts             # extract_links
+│   ├── parse-sitemap.ts             # parse_sitemap
+│   ├── check-links.ts              # check_links
+│   ├── check-redirect-chain.ts     # check_redirect_chain
+│   ├── check-performance.ts        # check_performance
+│   ├── check-mobile.ts             # check_mobile
+│   ├── compare-pages.ts            # compare_pages
+│   └── audit-site-batch.ts         # audit_site_batch
+└── utils/
+    ├── fetcher.ts                    # HTTP fetch + Puppeteer fallback + withPuppeteerTimeout
+    ├── html-parser.ts               # Cheerio-based HTML extraction
+    ├── robots-parser.ts             # robots.txt parser
+    ├── url-utils.ts                 # URL normalization utilities
+    └── response.ts                  # StandardResponse, ToolIssue, ToolMeta, helpers
+```
+
+## Stack technique
+
+- **Runtime** : Node.js (ES2022)
+- **Langage** : TypeScript (strict)
+- **MCP SDK** : @modelcontextprotocol/sdk
+- **HTML parsing** : Cheerio
+- **Browser automation** : Puppeteer
+- **Validation** : Zod
+- **Transport** : stdio (défaut) ou HTTP (Express + StreamableHTTPServerTransport)
+
+## Développement
+
+```bash
+npm run dev        # Watch mode avec tsx
+npm run build      # Build TypeScript
+npm start          # Serveur stdio
+npm run start:http # Serveur HTTP (port 3001)
+```
+
+## Licence
 
 MIT

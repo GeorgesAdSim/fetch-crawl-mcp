@@ -6,6 +6,12 @@ import {
   fetchRobotsTxt,
   isAllowedByRobots,
 } from "../utils/robots-parser.js";
+import {
+  type StandardResponse,
+  createMeta,
+  createIssue,
+  generateRecommendations,
+} from "../utils/response.js";
 
 export const crawlSiteSchema = {
   url: z.string().url().describe("The starting URL to crawl"),
@@ -145,7 +151,8 @@ export async function crawlSite({
   respectRobotsTxt: boolean;
   includePattern?: string;
   excludePattern?: string;
-}) {
+}): Promise<StandardResponse> {
+  const startTime = performance.now();
   const visited = new Set<string>();
   const results: CrawledPage[] = [];
   const queue: Array<{ url: string; depth: number }> = [
@@ -234,20 +241,54 @@ export async function crawlSite({
     }
   }
 
+  const maxDepthReached = results.length > 0
+    ? Math.max(...results.map((r) => r.depth))
+    : 0;
+
+  // Build issues
+  const issues = [];
+  for (const page of results) {
+    if (page.status >= 400) {
+      issues.push(createIssue(
+        "error",
+        "page-status",
+        `Page ${page.url} returned status ${page.status}`,
+        page.error
+      ));
+    } else if (page.status >= 300 && page.status < 400) {
+      issues.push(createIssue(
+        "warning",
+        "page-redirect",
+        `Page ${page.url} returned redirect status ${page.status}`
+      ));
+    }
+  }
+
+  const errorPages = results.filter((r) => r.status >= 400).length;
+  const errorRatio = results.length > 0 ? errorPages / results.length : 0;
+  const score = Math.max(0, Math.round(100 - errorRatio * 100));
+
   return {
-    startUrl: url,
-    pagesFound: results.length,
-    maxDepthReached:
-      results.length > 0
-        ? Math.max(...results.map((r) => r.depth))
-        : 0,
-    robotsTxt: respectRobotsTxt
-      ? {
-          disallowedRules: disallowed.length,
-          crawlDelay: robotsCrawlDelay,
-          sitemapsFound: robotsSitemaps,
-        }
-      : undefined,
-    pages: results,
+    url,
+    finalUrl: url,
+    status: results[0]?.status ?? 0,
+    score,
+    summary: `Crawl de ${url}: ${results.length} pages trouvées, profondeur max ${maxDepthReached}`,
+    issues,
+    recommendations: generateRecommendations(issues),
+    meta: createMeta(startTime, "fetch", false, false),
+    data: {
+      startUrl: url,
+      pagesFound: results.length,
+      maxDepthReached,
+      robotsTxt: respectRobotsTxt
+        ? {
+            disallowedRules: disallowed.length,
+            crawlDelay: robotsCrawlDelay,
+            sitemapsFound: robotsSitemaps,
+          }
+        : undefined,
+      pages: results,
+    },
   };
 }
