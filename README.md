@@ -433,6 +433,55 @@ src/
 - **Validation** : Zod
 - **Transport** : stdio (défaut) ou HTTP (Express + StreamableHTTPServerTransport)
 
+## Déploiement Docker
+
+### Quick start
+
+```bash
+./deploy.sh
+```
+
+### Manuel
+
+```bash
+# Build TypeScript
+npm run build
+
+# Build image Docker
+docker build -t fetch-crawl-mcp:latest .
+
+# Lancer avec docker compose
+docker compose up -d
+
+# Vérifier
+curl http://localhost:3001/health
+```
+
+### Configuration Docker
+
+Le `Dockerfile` utilise `node:22-slim` avec Chromium préinstallé pour Puppeteer. L'image finale ne contient que `build/` et les dépendances de production.
+
+| Variable d'environnement | Défaut | Description |
+|--------------------------|--------|-------------|
+| `NODE_ENV` | `production` | Environnement Node.js |
+| `PUPPETEER_EXECUTABLE_PATH` | `/usr/bin/chromium` | Chemin vers Chromium dans le container |
+
+Ressources par défaut (docker-compose) : 2 Go RAM, 1.5 CPU.
+
+### Configuration client MCP (HTTP distant)
+
+```json
+{
+  "mcpServers": {
+    "fetch-crawl-mcp": {
+      "url": "http://YOUR_SERVER:3001/mcp"
+    }
+  }
+}
+```
+
+---
+
 ## Développement
 
 ```bash
