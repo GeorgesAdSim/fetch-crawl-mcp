@@ -30,8 +30,8 @@ export const auditSiteBatchSchema = {
     .number()
     .int()
     .min(1)
-    .max(50)
-    .default(20)
+    .max(200)
+    .default(30)
     .describe("Max pages to audit"),
   concurrency: z
     .number()
@@ -48,6 +48,8 @@ export const auditSiteBatchSchema = {
     .default(500)
     .describe("Delay in ms between batches"),
 };
+
+const BATCH_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
 interface PageAuditResult {
   url: string;
@@ -194,8 +196,20 @@ async function collectUrls(
   }
 
   if (source === "sitemap") {
-    const result = await parseSitemap({ url });
-    const entries = (result.data.entries as Array<{ loc: string }>) || [];
+    let result = await parseSitemap({ url });
+    let entries = (result.data.entries as Array<{ loc: string }>) || [];
+
+    // Fallback: try /1_index_sitemap.xml if primary returned 0 URLs
+    if (entries.length === 0) {
+      try {
+        const origin = new URL(url).origin;
+        result = await parseSitemap({ url: `${origin}/1_index_sitemap.xml` });
+        entries = (result.data.entries as Array<{ loc: string }>) || [];
+      } catch {
+        // fallback failed
+      }
+    }
+
     return entries.slice(0, limit).map((e) => e.loc);
   }
 
@@ -237,11 +251,13 @@ export async function auditSiteBatch({
   delay: number;
 }): Promise<StandardResponse> {
   const startTime = performance.now();
+  const startedAt = new Date().toISOString();
 
   // 1. Collect URLs
   const pageUrls = await collectUrls(url, source, urls, limit);
 
   if (pageUrls.length === 0) {
+    const finishedAt = new Date().toISOString();
     return {
       url,
       finalUrl: url,
@@ -261,14 +277,29 @@ export async function auditSiteBatch({
         quickWins: [],
         criticalPages: [],
         allPages: [],
+        executionStats: {
+          startedAt,
+          finishedAt,
+          durationSeconds: 0,
+          pagesPerSecond: 0,
+          timedOut: false,
+        },
       },
     };
   }
 
-  // 2. Audit each URL
+  // 2. Audit each URL with 5-minute timeout
   const allResults: PageAuditResult[] = [];
+  let timedOut = false;
 
   for (let i = 0; i < pageUrls.length; i += concurrency) {
+    // Check timeout before each batch
+    const elapsed = performance.now() - startTime;
+    if (elapsed > BATCH_TIMEOUT_MS) {
+      timedOut = true;
+      break;
+    }
+
     if (i > 0 && delay > 0) {
       await sleep(jitter(delay));
     }
@@ -294,6 +325,13 @@ export async function auditSiteBatch({
     );
     allResults.push(...batchResults);
   }
+
+  const finishedAt = new Date().toISOString();
+  const durationSeconds = Math.round((performance.now() - startTime) / 1000);
+  const pagesPerSecond =
+    durationSeconds > 0
+      ? Math.round((allResults.length / durationSeconds) * 100) / 100
+      : allResults.length;
 
   // 3. Aggregate
   const scores = allResults.map((r) => r.score);
@@ -405,6 +443,14 @@ export async function auditSiteBatch({
   // Build issues for StandardResponse
   const issues: ToolIssue[] = [];
 
+  if (timedOut) {
+    issues.push(createIssue(
+      "warning",
+      "batch-timeout",
+      `Batch timed out after 5 minutes, ${allResults.length}/${pageUrls.length} pages audited`
+    ));
+  }
+
   if (distribution.mauvais > 0) {
     issues.push(createIssue("error", "distribution", `${distribution.mauvais} page(s) scored below 50`, `${Math.round((distribution.mauvais / allResults.length) * 100)}% of pages`));
   }
@@ -435,10 +481,10 @@ export async function auditSiteBatch({
     finalUrl: url,
     status: 200,
     score: scoreAverage,
-    summary: `Audit batch de ${url}: ${allResults.length} pages, score moyen ${scoreAverage}/100, ${topProblemLabel}`,
+    summary: `Audit batch de ${url}: ${allResults.length} pages, score moyen ${scoreAverage}/100, ${topProblemLabel}${timedOut ? " (timeout 5min)" : ""}`,
     issues,
     recommendations: generateRecommendations(issues),
-    meta: createMeta(startTime, "fetch", false, false),
+    meta: createMeta(startTime, "fetch", false, timedOut),
     data: {
       source,
       pagesAudited: allResults.length,
@@ -453,6 +499,13 @@ export async function auditSiteBatch({
         score: r.score,
         issues: r.issues,
       })),
+      executionStats: {
+        startedAt,
+        finishedAt,
+        durationSeconds,
+        pagesPerSecond,
+        timedOut,
+      },
     },
   };
 }

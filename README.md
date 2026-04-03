@@ -1,6 +1,6 @@
-# Fetch Crawl MCP v3.1.0
+# Fetch Crawl MCP v4.0.0
 
-Serveur MCP (Model Context Protocol) pour fetcher, crawler et analyser des sites web. 17 outils utilisables depuis Claude Code, Claude Desktop, ou tout client MCP compatible.
+Serveur MCP (Model Context Protocol) pour fetcher, crawler et analyser des sites web. 19 outils utilisables depuis Claude Code, Claude Desktop, ou tout client MCP compatible.
 
 ## Installation
 
@@ -75,7 +75,7 @@ Le fetcher intègre un système de détection anti-bot avancé :
 - **Fallback propre** : si le site reste bloqué même avec Puppeteer, retour d'un status 403 avec info `antiBot: { blocked, provider, confidence }` au lieu d'un crash
 - **Launch args optimisés** : `--disable-blink-features=AutomationControlled`, `--disable-features=IsolateOrigins,site-per-process`, `--window-size=1920,1080`
 
-## Outils (17)
+## Outils (19)
 
 ### Fetching & Crawling
 
@@ -378,9 +378,13 @@ Audit batch de multiples pages d'un site avec agrégation des résultats.
 | `url` | string | *requis* | URL du site |
 | `source` | `"sitemap"` \| `"crawl"` \| `"urls"` | `"sitemap"` | Source des URLs |
 | `urls` | string[] | — | Liste d'URLs (si source = "urls") |
-| `limit` | number (1–50) | `20` | Nombre max de pages |
+| `limit` | number (1–200) | `30` | Nombre max de pages |
 | `concurrency` | number (1–5) | `2` | Pages auditées en parallèle |
 | `delay` | number (0–5000) | `500` | Délai entre les batchs |
+
+**Timeout** : le batch s'arrête proprement après 5 minutes avec `meta.partial = true`.
+
+**Fallback sitemap** : si `/sitemap.xml` ne retourne aucune URL, essaie automatiquement `/1_index_sitemap.xml`.
 
 **Agrégation** :
 - Score moyen et médiane
@@ -388,6 +392,58 @@ Audit batch de multiples pages d'un site avec agrégation des résultats.
 - Top 10 problèmes triés par fréquence
 - Quick wins (pages > 60 pts avec 1-2 fixes faciles)
 - Pages critiques (les 10 pires scores)
+- `executionStats`: startedAt, finishedAt, durationSeconds, pagesPerSecond, timedOut
+
+---
+
+#### `detect_orphan_pages`
+
+Détecte les pages orphelines en croisant le sitemap, le crawl et le graphe de liens internes.
+
+| Paramètre | Type | Défaut | Description |
+|-----------|------|--------|-------------|
+| `url` | string | *requis* | URL du site |
+| `maxCrawlPages` | number (1–300) | `100` | Pages crawlées pour le graphe |
+| `crawlDepth` | number (1–5) | `3` | Profondeur de crawl |
+| `concurrency` | number (1–5) | `3` | Pages en parallèle |
+| `delay` | number (0–5000) | `300` | Délai entre batches |
+
+**Classification** (6 catégories) :
+- `orphan_in_sitemap` : dans le sitemap, 0 lien interne (critique)
+- `orphan_not_in_sitemap` : hors sitemap, 0-1 lien interne (isolée)
+- `sitemap_only` : dans le sitemap, non atteinte par le crawl
+- `crawl_only` : trouvée par le crawl, absente du sitemap
+- `deep_page` : atteinte uniquement à profondeur >= 4
+- `well_linked` : sitemap + crawl + >= 2 liens entrants
+
+**Score** : -2/orpheline (max -40), -1/sitemap_only (max -20), -1/crawl_only (max -15), -0.5/deep_page (max -10), -15 si cohérence < 50%.
+
+**Retour** : stats (overlap sitemap/crawl), catégories avec exemples, top 20 pages hub (plus de liens entrants), top 10 orphelines critiques.
+
+---
+
+#### `detect_duplicate_content`
+
+Détecte les contenus dupliqués et quasi-dupliqués sur un site.
+
+| Paramètre | Type | Défaut | Description |
+|-----------|------|--------|-------------|
+| `url` | string | *requis* | URL du site |
+| `source` | `"sitemap"` \| `"crawl"` \| `"urls"` | `"crawl"` | Source des URLs |
+| `urls` | string[] | — | Liste d'URLs (si source = "urls") |
+| `limit` | number (1–200) | `50` | Nombre max de pages |
+| `concurrency` | number (1–5) | `3` | Pages en parallèle |
+| `delay` | number (0–5000) | `300` | Délai entre batches |
+| `similarityThreshold` | number (0–1) | `0.8` | Seuil de similarité pour near-duplicates |
+
+**Détection** :
+- **Exact duplicates** : titles, descriptions, H1 identiques (groupés par cluster)
+- **Near-duplicates** : titles et contenus quasi-identiques (similarité mots communs / mots uniques > seuil)
+- Optimisation : regroupement par les 3 premiers mots pour éviter O(n²)
+
+**Score** : -5 par cluster exact (max -40), -2 par cluster near-duplicate (max -30).
+
+**Retour** : `exactDuplicates[]`, `nearDuplicates[]`, `uniquePages`, stats avec `mostDuplicatedValue`.
 
 ---
 
@@ -407,14 +463,16 @@ src/
 │   ├── check-robots-txt.ts          # check_robots_txt
 │   ├── extract-content.ts           # extract_content
 │   ├── extract-links.ts             # extract_links
-│   ├── extract-with-schema.ts       # extract_with_schema ✨ NEW
+│   ├── extract-with-schema.ts       # extract_with_schema
 │   ├── parse-sitemap.ts             # parse_sitemap
 │   ├── check-links.ts              # check_links
 │   ├── check-redirect-chain.ts     # check_redirect_chain
 │   ├── check-performance.ts        # check_performance
 │   ├── check-mobile.ts             # check_mobile
 │   ├── compare-pages.ts            # compare_pages
-│   └── audit-site-batch.ts         # audit_site_batch
+│   ├── audit-site-batch.ts         # audit_site_batch
+│   ├── detect-orphan-pages.ts      # detect_orphan_pages
+│   └── detect-duplicate-content.ts # detect_duplicate_content
 └── utils/
     ├── fetcher.ts                    # HTTP fetch + stealth Puppeteer + anti-bot detection
     ├── html-parser.ts               # Cheerio-based HTML extraction

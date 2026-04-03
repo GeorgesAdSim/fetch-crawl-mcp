@@ -56,11 +56,15 @@ import {
   detectOrphanPagesSchema,
   detectOrphanPages,
 } from "./tools/detect-orphan-pages.js";
+import {
+  detectDuplicateContentSchema,
+  detectDuplicateContent,
+} from "./tools/detect-duplicate-content.js";
 
 export function createServer(): McpServer {
   const server = new McpServer({
     name: "fetch-crawl-mcp",
-    version: "3.1.0",
+    version: "4.0.0",
   });
 
   // Tool: fetch_page
@@ -384,6 +388,24 @@ export function createServer(): McpServer {
     },
     async (args) => {
       const result = await detectOrphanPages(args);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  // Tool: detect_duplicate_content
+  server.registerTool(
+    "detect_duplicate_content",
+    {
+      title: "Detect Duplicate Content",
+      description:
+        "Detect duplicate and near-duplicate content across a site's pages. Analyzes titles, meta descriptions, H1 headings, and text content. Groups exact duplicates and identifies near-duplicates based on word similarity. Supports sitemap, crawl, or custom URL list as page source.",
+      inputSchema: detectDuplicateContentSchema,
+      annotations: { readOnlyHint: true },
+    },
+    async (args) => {
+      const result = await detectDuplicateContent(args);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };
