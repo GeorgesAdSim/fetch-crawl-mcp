@@ -60,11 +60,27 @@ import {
   detectDuplicateContentSchema,
   detectDuplicateContent,
 } from "./tools/detect-duplicate-content.js";
+import {
+  checkGtmSnippetSchema,
+  checkGtmSnippet,
+} from "./tools/check-gtm-snippet.js";
+import {
+  checkDatalayerSchema,
+  checkDatalayer,
+} from "./tools/check-datalayer.js";
+import {
+  interceptTrackingRequestsSchema,
+  interceptTrackingRequests,
+} from "./tools/intercept-tracking-requests.js";
+import {
+  auditTrackingSchema,
+  auditTracking,
+} from "./tools/audit-tracking.js";
 
 export function createServer(): McpServer {
   const server = new McpServer({
     name: "fetch-crawl-mcp",
-    version: "4.0.0",
+    version: "4.1.0",
   });
 
   // Tool: fetch_page
@@ -424,6 +440,78 @@ export function createServer(): McpServer {
     },
     async (args) => {
       const result = await extractWithSchema(args);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  // Tool: check_gtm_snippet
+  server.registerTool(
+    "check_gtm_snippet",
+    {
+      title: "Check GTM Snippet",
+      description:
+        "Check a page for Google Tag Manager (GTM) and gtag.js snippets. Detects GTM container IDs, GA4 measurement IDs, verifies snippet placement (head vs body), noscript fallback, and duplicate IDs.",
+      inputSchema: checkGtmSnippetSchema,
+      annotations: { readOnlyHint: true },
+    },
+    async (args) => {
+      const result = await checkGtmSnippet(args);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  // Tool: check_datalayer
+  server.registerTool(
+    "check_datalayer",
+    {
+      title: "Check DataLayer",
+      description:
+        "Inspect window.dataLayer at runtime using a headless browser. Checks if dataLayer exists, its contents (events), whether GTM and gtag are loaded, and detects suspicious patterns like dataLayer redefinition after GTM init.",
+      inputSchema: checkDatalayerSchema,
+      annotations: { readOnlyHint: true },
+    },
+    async (args) => {
+      const result = await checkDatalayer(args);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  // Tool: intercept_tracking_requests
+  server.registerTool(
+    "intercept_tracking_requests",
+    {
+      title: "Intercept Tracking Requests",
+      description:
+        "Intercept and analyze all tracking network requests (GA4 hits, GTM, gtag) fired during page load using Puppeteer request interception. Parses GA4 /g/collect hits for event names and measurement IDs. Detects obsolete Universal Analytics hits and duplicate events.",
+      inputSchema: interceptTrackingRequestsSchema,
+      annotations: { readOnlyHint: true },
+    },
+    async (args) => {
+      const result = await interceptTrackingRequests(args);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  // Tool: audit_tracking
+  server.registerTool(
+    "audit_tracking",
+    {
+      title: "Audit Tracking",
+      description:
+        "Full tracking audit: runs check_gtm_snippet, check_datalayer, and intercept_tracking_requests in parallel, then produces a unified report with a global score, severity summary, and cross-tool diagnosis.",
+      inputSchema: auditTrackingSchema,
+      annotations: { readOnlyHint: true },
+    },
+    async (args) => {
+      const result = await auditTracking(args);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };

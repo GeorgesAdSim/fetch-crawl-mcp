@@ -1,6 +1,6 @@
-# Fetch Crawl MCP v4.0.0
+# Fetch Crawl MCP v4.1.0
 
-Serveur MCP (Model Context Protocol) pour fetcher, crawler et analyser des sites web. 19 outils utilisables depuis Claude Code, Claude Desktop, ou tout client MCP compatible.
+Serveur MCP (Model Context Protocol) pour fetcher, crawler et analyser des sites web. 23 outils utilisables depuis Claude Code, Claude Desktop, ou tout client MCP compatible.
 
 ## Installation
 
@@ -9,7 +9,7 @@ npm install
 npm run build
 ```
 
-Puppeteer est requis pour les outils `screenshot`, `check_performance`, `check_mobile` et le fallback anti-bot. Chromium s'installe automatiquement lors du `npm install`.
+Puppeteer est requis pour les outils `screenshot`, `check_performance`, `check_mobile`, `check_datalayer`, `intercept_tracking_requests`, `audit_tracking` et le fallback anti-bot. Chromium s'installe automatiquement lors du `npm install`.
 
 ## Utilisation
 
@@ -75,7 +75,7 @@ Le fetcher intègre un système de détection anti-bot avancé :
 - **Fallback propre** : si le site reste bloqué même avec Puppeteer, retour d'un status 403 avec info `antiBot: { blocked, provider, confidence }` au lieu d'un crash
 - **Launch args optimisés** : `--disable-blink-features=AutomationControlled`, `--disable-features=IsolateOrigins,site-per-process`, `--window-size=1920,1080`
 
-## Outils (19)
+## Outils (23)
 
 ### Fetching & Crawling
 
@@ -351,6 +351,85 @@ Audit de compatibilité mobile via Puppeteer avec viewport iPhone (375x812).
 
 ---
 
+### Tracking Audit
+
+#### `check_gtm_snippet`
+
+Vérifie la présence et la configuration des snippets GTM et gtag.js sur une page (analyse HTML statique, pas besoin de Puppeteer).
+
+| Paramètre | Type | Défaut | Description |
+|-----------|------|--------|-------------|
+| `url` | string | *requis* | URL à vérifier |
+
+**Détections** :
+- Containers GTM (GTM-XXXXX) et IDs GA4 (G-XXXXXXXX)
+- Placement du snippet (dans `<head>` ou non)
+- Présence du `<noscript>` GTM fallback dans `<body>`
+- IDs dupliqués (double-counting)
+
+**Score** : -15 si aucun tracking, -5 par warning (noscript manquant, doublons, mauvais placement).
+
+---
+
+#### `check_datalayer`
+
+Inspecte `window.dataLayer` en runtime via Puppeteer. Vérifie l'existence, le contenu, et détecte les patterns suspects.
+
+| Paramètre | Type | Défaut | Description |
+|-----------|------|--------|-------------|
+| `url` | string | *requis* | URL à inspecter |
+| `wait_ms` | number (0–5000) | `2000` | Délai d'attente après chargement avant lecture du dataLayer |
+
+**Vérifications** :
+- `window.dataLayer` existe et contient des events
+- `window.google_tag_manager` chargé (runtime GTM)
+- `window.gtag` est une function
+- Détection de redéfinition de dataLayer après init GTM (pattern suspect)
+
+**Timeout** : 30 secondes (Puppeteer).
+
+---
+
+#### `intercept_tracking_requests`
+
+Intercepte les requêtes réseau de tracking (GA4, GTM, gtag) pendant le chargement de la page via Puppeteer.
+
+| Paramètre | Type | Défaut | Description |
+|-----------|------|--------|-------------|
+| `url` | string | *requis* | URL à monitorer |
+| `wait_ms` | number (0–8000) | `3000` | Délai d'attente après chargement pour capturer les hits différés |
+
+**Requêtes interceptées** :
+- `google-analytics.com/g/collect` → hits GA4
+- `analytics.google.com/g/collect` → hits GA4 alternatif
+- `googletagmanager.com/gtm.js` → chargement GTM
+- `googletagmanager.com/gtag/js` → chargement gtag
+- `stats.g.doubleclick.net` → hits Universal Analytics (obsolète)
+
+**Parsing GA4** : event name (`en`), measurement ID (`tid`), protocol version (`v`).
+
+**Score** : -15 si aucun hit GA4, -15 si UA détecté, -5 par warning (doublons, multi-IDs).
+
+**Timeout** : 45 secondes (Puppeteer).
+
+---
+
+#### `audit_tracking`
+
+Audit tracking complet : exécute `check_gtm_snippet`, `check_datalayer` et `intercept_tracking_requests` en parallèle, puis produit un rapport unifié.
+
+| Paramètre | Type | Défaut | Description |
+|-----------|------|--------|-------------|
+| `url` | string | *requis* | URL à auditer |
+
+**Rapport** :
+- Score global (moyenne pondérée : GTM 30%, dataLayer 30%, intercept 40%)
+- `severity_summary` : comptage par niveau (critical, warning, ok)
+- `diagnosis` : phrase de diagnostic croisé (ex: "GTM présent mais aucun hit GA4 envoyé → vérifier les triggers")
+- Données complètes des 3 sous-outils
+
+---
+
 ### Multi-Page & Comparison
 
 #### `compare_pages`
@@ -472,7 +551,11 @@ src/
 │   ├── compare-pages.ts            # compare_pages
 │   ├── audit-site-batch.ts         # audit_site_batch
 │   ├── detect-orphan-pages.ts      # detect_orphan_pages
-│   └── detect-duplicate-content.ts # detect_duplicate_content
+│   ├── detect-duplicate-content.ts # detect_duplicate_content
+│   ├── check-gtm-snippet.ts       # check_gtm_snippet
+│   ├── check-datalayer.ts         # check_datalayer
+│   ├── intercept-tracking-requests.ts # intercept_tracking_requests
+│   └── audit-tracking.ts          # audit_tracking
 └── utils/
     ├── fetcher.ts                    # HTTP fetch + stealth Puppeteer + anti-bot detection
     ├── html-parser.ts               # Cheerio-based HTML extraction
