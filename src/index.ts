@@ -1,7 +1,12 @@
 #!/usr/bin/env node
 
+import { readFileSync } from "node:fs";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { createServer } from "./server.js";
+
+const pkg = JSON.parse(
+  readFileSync(new URL("../package.json", import.meta.url), "utf-8")
+);
 
 const args = process.argv.slice(2);
 const isHttpMode = args.includes("--http");
@@ -32,7 +37,7 @@ async function startHttp() {
 
   // Health check
   app.get("/health", (_req, res) => {
-    res.json({ status: "ok", name: "fetch-crawl-mcp", version: "4.0.0" });
+    res.json({ status: "ok", name: "fetch-crawl-mcp", version: pkg.version });
   });
 
   // --- Streamable HTTP (stateless) ---
