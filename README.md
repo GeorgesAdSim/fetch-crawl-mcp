@@ -1,6 +1,6 @@
-# Fetch Crawl MCP v4.1.0
+# Fetch Crawl MCP v4.2.0
 
-Serveur MCP (Model Context Protocol) pour fetcher, crawler et analyser des sites web. 23 outils utilisables depuis Claude Code, Claude Desktop, ou tout client MCP compatible.
+Serveur MCP (Model Context Protocol) pour fetcher, crawler et analyser des sites web. 29 outils utilisables depuis Claude Code, Claude Desktop, ou tout client MCP compatible.
 
 ## Installation
 
@@ -75,7 +75,7 @@ Le fetcher intègre un système de détection anti-bot avancé :
 - **Fallback propre** : si le site reste bloqué même avec Puppeteer, retour d'un status 403 avec info `antiBot: { blocked, provider, confidence }` au lieu d'un crash
 - **Launch args optimisés** : `--disable-blink-features=AutomationControlled`, `--disable-features=IsolateOrigins,site-per-process`, `--window-size=1920,1080`
 
-## Outils (23)
+## Outils (29)
 
 ### Fetching & Crawling
 
@@ -523,6 +523,69 @@ Détecte les contenus dupliqués et quasi-dupliqués sur un site.
 **Score** : -5 par cluster exact (max -40), -2 par cluster near-duplicate (max -30).
 
 **Retour** : `exactDuplicates[]`, `nearDuplicates[]`, `uniquePages`, stats avec `mostDuplicatedValue`.
+
+---
+
+### Security, Accessibility & Compliance (v4.2.0)
+
+#### `check_security_headers`
+
+Audit des HTTP security headers (HSTS, CSP, X-Frame-Options, Referrer-Policy, Permissions-Policy, COOP, CORP, COEP). Score 0-100 avec grade A-F.
+
+| Paramètre | Type | Défaut | Description |
+|-----------|------|--------|-------------|
+| `url` | string | *requis* | URL à auditer |
+
+---
+
+#### `check_hreflang`
+
+Valide les balises hreflang : codes ISO 639-1, liens réciproques, cohérence avec la langue de la page, présence de `x-default`, consistance avec canonical.
+
+| Paramètre | Type | Défaut | Description |
+|-----------|------|--------|-------------|
+| `url` | string | *requis* | URL à auditer |
+
+---
+
+#### `audit_content_quality`
+
+Analyse de la qualité de contenu : lisibilité multilingue (FR/NL/EN/DE/ES/IT), word count, structure des titres, densité de liens, richesse média, signaux d'engagement (TOC, FAQ, CTA).
+
+| Paramètre | Type | Défaut | Description |
+|-----------|------|--------|-------------|
+| `url` | string | *requis* | URL à auditer |
+
+---
+
+#### `check_accessibility`
+
+Audit WCAG léger sur 9 catégories : alt des images, labels de formulaires, landmarks sémantiques, hiérarchie des titres, qualité du texte des liens (détection multilingue FR/NL/EN/DE du "click here"), ARIA, tableaux, médias, contraste.
+
+| Paramètre | Type | Défaut | Description |
+|-----------|------|--------|-------------|
+| `url` | string | *requis* | URL à auditer |
+
+---
+
+#### `extract_images_audit`
+
+Audit complet des images via Puppeteer : adoption des formats modernes (WebP/AVIF), alt text, responsive (srcset), dimensions optimales, lazy loading, candidat LCP, poids des fichiers.
+
+| Paramètre | Type | Défaut | Description |
+|-----------|------|--------|-------------|
+| `url` | string | *requis* | URL à auditer |
+
+---
+
+#### `check_consent_mode`
+
+Audit Google Consent Mode v2 et conformité cookies RGPD : détection CMP (Cookiebot, OneTrust, Didomi, Axeptio, etc.), IAB TCF API, vérification `gtag('consent', 'default'|'update')`, analyse des signaux `gcs`/`gcd` sur les hits GA4, audit des cookies déposés avant consentement.
+
+| Paramètre | Type | Défaut | Description |
+|-----------|------|--------|-------------|
+| `url` | string | *requis* | URL à auditer |
+| `wait_ms` | number (0–10000) | `5000` | Délai d'attente après chargement pour laisser le CMP s'initialiser |
 
 ---
 

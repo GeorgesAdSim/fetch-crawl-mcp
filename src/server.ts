@@ -76,6 +76,30 @@ import {
   auditTrackingSchema,
   auditTracking,
 } from "./tools/audit-tracking.js";
+import {
+  checkSecurityHeadersSchema,
+  checkSecurityHeaders,
+} from "./tools/check-security-headers.js";
+import {
+  checkHreflangSchema,
+  checkHreflang,
+} from "./tools/check-hreflang.js";
+import {
+  auditContentQualitySchema,
+  auditContentQuality,
+} from "./tools/audit-content-quality.js";
+import {
+  checkAccessibilitySchema,
+  checkAccessibility,
+} from "./tools/check-accessibility.js";
+import {
+  extractImagesAuditSchema,
+  extractImagesAudit,
+} from "./tools/extract-images-audit.js";
+import {
+  checkConsentModeSchema,
+  checkConsentMode,
+} from "./tools/check-consent-mode.js";
 
 export function createServer(): McpServer {
   const server = new McpServer({
@@ -512,6 +536,114 @@ export function createServer(): McpServer {
     },
     async (args) => {
       const result = await auditTracking(args);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  // Tool: check_security_headers
+  server.registerTool(
+    "check_security_headers",
+    {
+      title: "Check Security Headers",
+      description:
+        "Audit HTTP security headers (HSTS, CSP, X-Frame-Options, Referrer-Policy, Permissions-Policy, etc.). Returns a 0-100 score with grade (A-F), per-header analysis, and actionable recommendations. Lightweight — uses a single HTTP request, no browser needed.",
+      inputSchema: checkSecurityHeadersSchema,
+      annotations: { readOnlyHint: true },
+    },
+    async (args) => {
+      const result = await checkSecurityHeaders(args);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  // Tool: check_hreflang
+  server.registerTool(
+    "check_hreflang",
+    {
+      title: "Check Hreflang",
+      description:
+        "Validate hreflang alternate language tags on a page. Checks language code validity (ISO 639-1), URL accessibility, reciprocal linking between language versions, x-default presence, canonical consistency, and language set coherence. Returns a 0-100 score with detailed per-alternate analysis.",
+      inputSchema: checkHreflangSchema,
+      annotations: { readOnlyHint: true },
+    },
+    async (args) => {
+      const result = await checkHreflang(args);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  // Tool: audit_content_quality
+  server.registerTool(
+    "audit_content_quality",
+    {
+      title: "Audit Content Quality",
+      description:
+        "Analyze content quality of a web page: word count, readability score (multilingual), text-to-HTML ratio, heading structure, link density, media richness, and engagement signals (TOC, FAQ, CTA). Returns a 0-100 score with per-category breakdown and actionable recommendations. Does NOT check SEO meta tags — use audit_onpage for that.",
+      inputSchema: auditContentQualitySchema,
+      annotations: { readOnlyHint: true },
+    },
+    async (args) => {
+      const result = await auditContentQuality(args);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  // Tool: check_accessibility
+  server.registerTool(
+    "check_accessibility",
+    {
+      title: "Check Accessibility",
+      description:
+        "Run a lightweight WCAG accessibility audit on a web page. Checks images alt text, form labels, semantic structure (landmarks, lang), heading hierarchy, link text quality, viewport zoom restrictions, table structure, media controls, and ARIA usage. Returns a 0-100 score with per-category breakdown, WCAG criteria references, and actionable issues with CSS selectors. Does NOT check color contrast or keyboard navigation (requires browser rendering).",
+      inputSchema: checkAccessibilitySchema,
+      annotations: { readOnlyHint: true },
+    },
+    async (args) => {
+      const result = await checkAccessibility(args);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  // Tool: extract_images_audit
+  server.registerTool(
+    "extract_images_audit",
+    {
+      title: "Extract Images Audit",
+      description:
+        "Comprehensive image audit for a web page. Uses Puppeteer to detect all images (img, picture, CSS backgrounds) including lazy-loaded ones. Analyzes format (WebP/AVIF adoption), alt text quality, responsive images (srcset), sizing optimization, lazy loading correctness, LCP candidate optimization, and file sizes. Returns a 0-100 score with per-image details and actionable recommendations.",
+      inputSchema: extractImagesAuditSchema,
+      annotations: { readOnlyHint: true },
+    },
+    async (args) => {
+      const result = await extractImagesAudit(args);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  // Tool: check_consent_mode
+  server.registerTool(
+    "check_consent_mode",
+    {
+      title: "Check Consent Mode",
+      description:
+        "Audit Google Consent Mode v2 implementation and cookie compliance. Detects CMP vendor (Cookiebot, OneTrust, Didomi, Axeptio, etc.), verifies consent default/update configuration, checks IAB TCF API presence, analyzes GA4 hit consent signals (gcs/gcd parameters), and audits pre-consent cookie behavior. Returns a 0-100 GDPR compliance score with detailed findings.",
+      inputSchema: checkConsentModeSchema,
+      annotations: { readOnlyHint: true },
+    },
+    async (args) => {
+      const result = await checkConsentMode(args);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };
