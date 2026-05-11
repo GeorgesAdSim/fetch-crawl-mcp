@@ -1,7 +1,7 @@
 [build]
   base = "spiroux-garde-meuble"
   command = "npm run build"
-  publish = ".next"
+  publish = "spiroux-garde-meuble/.next"
 
 [build.environment]
   NODE_VERSION = "20"
