@@ -5,6 +5,9 @@ services:
     build: .
     container_name: fetch-crawl-mcp
     restart: unless-stopped
+    # Process init (tini) en PID 1 : récupère les processus Chromium terminés.
+    # Sans lui, Node en PID 1 laisse des centaines de zombies s'accumuler.
+    init: true
     environment:
       - NODE_ENV=production
       - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
