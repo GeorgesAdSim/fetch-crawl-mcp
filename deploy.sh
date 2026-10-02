@@ -16,9 +16,11 @@ echo "Step 4: Starting new container..."
 docker compose up -d
 echo "Step 5: Waiting for health check..."
 sleep 5
-if curl -sf http://localhost:3001/health > /dev/null; then
+# Le port n'est pas publié sur l'hôte (Traefik uniquement) : on vérifie dans le conteneur.
+if docker exec fetch-crawl-mcp curl -sf http://localhost:3001/health > /dev/null; then
   echo "✅ Health check OK"
-  curl -s http://localhost:3001/health | python3 -m json.tool 2>/dev/null || curl -s http://localhost:3001/health
+  docker exec fetch-crawl-mcp curl -s http://localhost:3001/health
+  echo ""
 else
   echo "❌ Health check failed"
   docker logs fetch-crawl-mcp --tail 20
@@ -26,9 +28,5 @@ else
 fi
 echo ""
 echo "=== Deploy complete ==="
-echo "MCP endpoint: http://localhost:3001/mcp"
-echo "Health check: http://localhost:3001/health"
-echo ""
-echo "Pour exposer en HTTPS, configurer un reverse proxy :"
-echo "  Nginx: proxy_pass http://localhost:3001;"
-echo "  Caddy: reverse_proxy localhost:3001"
+echo "MCP endpoint: https://fetch.mcp.adsim.be/mcp (jeton requis)"
+echo "Health check: https://fetch.mcp.adsim.be/health"
