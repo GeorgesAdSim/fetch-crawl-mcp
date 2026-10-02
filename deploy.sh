@@ -8,14 +8,17 @@ fi
 echo "Step 1: Building TypeScript..."
 npm run build
 echo "Step 2: Building Docker image..."
-docker build -t fetch-crawl-mcp:latest .
-echo "Step 3: Stopping existing container..."
-docker stop fetch-crawl-mcp 2>/dev/null || true
-docker rm fetch-crawl-mcp 2>/dev/null || true
-echo "Step 4: Starting new container..."
-docker compose up -d
+# Construire via compose : c'est l'image que compose démarre ensuite
+# (un `docker build -t ...` séparé produirait une image que compose n'utilise pas).
+docker compose build
+echo "Step 3+4: Recreating container..."
+docker compose up -d --force-recreate
 echo "Step 5: Waiting for health check..."
-sleep 5
+# Le conteneur doit être "healthy" pour que Traefik le route (sinon 404 public).
+for i in $(seq 1 18); do
+  [ "$(docker inspect -f {{.State.Health.Status}} fetch-crawl-mcp)" = "healthy" ] && break
+  sleep 5
+done
 # Le port n'est pas publié sur l'hôte (Traefik uniquement) : on vérifie dans le conteneur.
 if docker exec fetch-crawl-mcp curl -sf http://localhost:3001/health > /dev/null; then
   echo "✅ Health check OK"
