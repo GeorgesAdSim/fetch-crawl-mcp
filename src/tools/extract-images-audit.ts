@@ -5,6 +5,7 @@ import {
   createMeta,
   createIssue,
 } from "../utils/response.js";
+import { launchBrowser } from "../utils/browser.js";
 
 export const extractImagesAuditSchema = {
   url: z.string().url().describe("The URL of the page to audit"),
@@ -612,8 +613,7 @@ async function collectPageImageData(
   device: "mobile" | "desktop",
   timeout: number
 ): Promise<RawPageImageData & { finalUrl: string; status: number }> {
-  const puppeteer = await import("puppeteer");
-  const browser = await puppeteer.default.launch({
+  const browser = await launchBrowser({
     headless: true,
     args: [
       "--no-sandbox",

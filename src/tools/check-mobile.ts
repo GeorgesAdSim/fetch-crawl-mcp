@@ -6,6 +6,7 @@ import {
   createIssue,
   generateRecommendations,
 } from "../utils/response.js";
+import { launchBrowser } from "../utils/browser.js";
 
 export const checkMobileSchema = {
   url: z.string().url().describe("The URL to check for mobile-friendliness"),
@@ -18,11 +19,9 @@ export async function checkMobile({ url }: { url: string }): Promise<StandardRes
   const startTime = performance.now();
 
   return withPuppeteerTimeout(async () => {
-    const puppeteer = await import("puppeteer");
-
     let browser;
     try {
-      browser = await puppeteer.default.launch({
+      browser = await launchBrowser({
         headless: true,
         args: [
           "--no-sandbox",

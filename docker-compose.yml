@@ -1,13 +1,31 @@
-version: '3.8'
+# Configuration de production (VPS, derrière Traefik sur le réseau root_default).
+# Pas de port publié : Traefik est la seule entrée (https://fetch.mcp.adsim.be).
 services:
   fetch-crawl-mcp:
     build: .
     container_name: fetch-crawl-mcp
     restart: unless-stopped
-    ports:
-      - "3001:3001"
     environment:
       - NODE_ENV=production
       - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+      # Jetons clients, séparés par des virgules (fichier .env à côté de ce compose, non versionné).
+      # Sans jeton, le serveur refuse de démarrer en production.
+      - FETCH_CRAWL_TOKENS=${FETCH_CRAWL_TOKENS:?FETCH_CRAWL_TOKENS manquant dans .env}
     mem_limit: 2g
     cpus: 1.5
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.fetch-crawl.rule=Host(`fetch.mcp.adsim.be`)"
+      - "traefik.http.routers.fetch-crawl.entrypoints=websecure"
+      - "traefik.http.routers.fetch-crawl.tls.certresolver=mytlschallenge"
+      - "traefik.http.services.fetch-crawl.loadbalancer.server.port=3001"
+      - "traefik.http.services.fetch-crawl.loadbalancer.responseforwarding.flushinterval=1ms"
+      - "traefik.http.middlewares.fetch-crawl-headers.headers.customresponseheaders.X-Accel-Buffering=no"
+      - "traefik.http.middlewares.fetch-crawl-headers.headers.customresponseheaders.Cache-Control=no-cache"
+      - "traefik.http.routers.fetch-crawl.middlewares=fetch-crawl-headers"
+    networks:
+      - root_default
+
+networks:
+  root_default:
+    external: true

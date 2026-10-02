@@ -1,4 +1,4 @@
-# Fetch Crawl MCP v4.2.0
+# Fetch Crawl MCP v4.3.0
 
 Serveur MCP (Model Context Protocol) pour fetcher, crawler et analyser des sites web. 29 outils utilisables depuis Claude Code, Claude Desktop, ou tout client MCP compatible.
 
@@ -28,6 +28,23 @@ npm run start:http
 # ou
 node build/index.js --http --port 3001
 ```
+
+### Sécurité (mode HTTP)
+
+**Authentification.** `/mcp` et `/sse` exigent un jeton. `/health` reste public.
+
+- Côté serveur : `FETCH_CRAWL_TOKENS` = liste séparée par des virgules, **un jeton par client** (24 caractères minimum), pour pouvoir en révoquer un seul. Générer : `openssl rand -hex 32`.
+- Côté client : en-tête `Authorization: Bearer <jeton>` (recommandé), ou `?token=<jeton>` dans l'URL pour les clients qui ne savent pas envoyer d'en-tête (connecteur Claude.ai). Un jeton en query string peut finir dans les logs du reverse proxy : lui réserver un jeton dédié.
+- `POST /messages` (SSE) n'a pas de jeton : l'identifiant de session est un UUID créé uniquement par un `GET /sse` authentifié.
+- En `NODE_ENV=production`, le serveur **refuse de démarrer** sans jeton. `ALLOW_UNAUTHENTICATED=true` le force à démarrer ouvert : développement local uniquement.
+
+**Protection SSRF.** Le serveur ne contacte que des adresses publiques :
+
+- Schémas `http`/`https`, ports 80/443, pas d'identifiants dans l'URL.
+- Refusés : IP privées, loopback, link-local (169.254.169.254, métadonnées cloud), CGNAT, multicast, IPv6 ULA/link-local, IPv4 mappées en IPv6 et NAT64 vers une IP privée ; noms à un seul label (noms de services Docker : `redis`, `data-engine-mcp`…) ; TLD réservés (`.local`, `.internal`, `.localhost`…).
+- `fetch()` (Node) : dispatcher undici global (`src/utils/net-guard.ts`), l'IP est vérifiée **à la connexion** : redirections et DNS rebinding compris.
+- Puppeteer : tous les navigateurs passent par `launchBrowser()` (`src/utils/browser.ts`), qui intercepte chaque requête de chaque page (navigation, iframe, image, XHR, popup). Les outils peuvent observer `page.on("request")` mais ne doivent jamais appeler `request.continue()`/`abort()` eux-mêmes.
+- Risque résiduel : Chromium résout le DNS lui-même après notre contrôle. Défense complète : une règle de pare-feu sortante sur le conteneur qui interdit les réseaux privés, par exemple `iptables -I DOCKER-USER -s <subnet du conteneur> -d 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,169.254.0.0/16 -j DROP` (à adapter : ne pas couper le trafic de retour du reverse proxy).
 
 ### Configuration client MCP
 

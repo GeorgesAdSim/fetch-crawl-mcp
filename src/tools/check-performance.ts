@@ -6,6 +6,7 @@ import {
   generateRecommendations,
 } from "../utils/response.js";
 import { withPuppeteerTimeout } from "../utils/fetcher.js";
+import { launchBrowser } from "../utils/browser.js";
 
 export const checkPerformanceSchema = {
   url: z.string().url().describe("The URL to audit"),
@@ -45,11 +46,9 @@ export async function checkPerformance({
   const startTime = performance.now();
 
   return withPuppeteerTimeout(async () => {
-    const puppeteer = await import("puppeteer");
-
     let browser;
     try {
-      browser = await puppeteer.default.launch({
+      browser = await launchBrowser({
         headless: true,
         args: [
           "--no-sandbox",

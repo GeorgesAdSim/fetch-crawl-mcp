@@ -5,6 +5,7 @@ import {
   createMeta,
   createIssue,
 } from "../utils/response.js";
+import { launchBrowser } from "../utils/browser.js";
 
 export const checkConsentModeSchema = {
   url: z.string().url().describe("The URL of the page to audit"),
@@ -532,8 +533,7 @@ async function collectConsentData(
   url: string,
   wait_ms: number
 ): Promise<RawConsentData> {
-  const puppeteer = await import("puppeteer");
-  const browser = await puppeteer.default.launch({
+  const browser = await launchBrowser({
     headless: true,
     args: [
       "--no-sandbox",
@@ -548,7 +548,7 @@ async function collectConsentData(
 
     const googleHits: GoogleHit[] = [];
 
-    await page.setRequestInterception(true);
+    // Observe requests only: the net guard (launchBrowser) resolves them.
     page.on("request", (request) => {
       const reqUrl = request.url();
       if (
@@ -569,7 +569,6 @@ async function collectConsentData(
           /* ignore */
         }
       }
-      request.continue();
     });
 
     const response = await page.goto(url, {

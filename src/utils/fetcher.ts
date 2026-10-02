@@ -1,3 +1,6 @@
+import { launchBrowser } from "./browser.js";
+import { assertPublicUrl } from "./net-guard.js";
+
 export interface FetchOptions {
   headers?: Record<string, string>;
   timeout?: number;
@@ -279,10 +282,9 @@ async function fetchWithPuppeteer(
   timeout: number
 ): Promise<FetchResult> {
   const startTime = performance.now();
-  const puppeteer = await import("puppeteer");
   let browser;
   try {
-    browser = await puppeteer.default.launch({
+    browser = await launchBrowser({
       headless: true,
       args: STEALTH_LAUNCH_ARGS,
     });
@@ -367,6 +369,9 @@ export async function fetchUrl(
     followRedirects = true,
     usePuppeteerFallback = true,
   } = options;
+
+  // Fail fast with a clear reason (the global dispatcher would also block it).
+  await assertPublicUrl(url);
 
   const startTime = performance.now();
   const requestHeaders = buildHeaders(headers);
@@ -468,6 +473,11 @@ export async function checkUrl(
   url: string,
   timeout: number = 5000
 ): Promise<{ status: number; ok: boolean; finalUrl: string; error?: string }> {
+  try {
+    await assertPublicUrl(url);
+  } catch (error) {
+    return { status: 0, ok: false, finalUrl: url, error: (error as Error).message };
+  }
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);

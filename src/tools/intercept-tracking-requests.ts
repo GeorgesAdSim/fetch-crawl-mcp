@@ -7,6 +7,7 @@ import {
   calculateScore,
   generateRecommendations,
 } from "../utils/response.js";
+import { launchBrowser } from "../utils/browser.js";
 
 export const interceptTrackingRequestsSchema = {
   url: z.string().url().describe("The URL to monitor for tracking requests"),
@@ -35,11 +36,9 @@ export async function interceptTrackingRequests({
   const startTime = performance.now();
 
   return withPuppeteerTimeout(async () => {
-    const puppeteer = await import("puppeteer");
-
     let browser;
     try {
-      browser = await puppeteer.default.launch({
+      browser = await launchBrowser({
         headless: true,
         args: [
           "--no-sandbox",
@@ -55,8 +54,7 @@ export async function interceptTrackingRequests({
       let gtagLoaded = false;
       let uaHitsDetected = false;
 
-      // Enable request interception
-      await page.setRequestInterception(true);
+      // Observe requests only: the net guard (launchBrowser) resolves them.
 
       page.on("request", (request) => {
         const reqUrl = request.url();
@@ -100,7 +98,6 @@ export async function interceptTrackingRequests({
         }
 
         // Let the request continue
-        request.continue();
       });
 
       // Navigate to the page
