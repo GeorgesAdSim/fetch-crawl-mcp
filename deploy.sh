@@ -1,6 +1,10 @@
 #!/bin/bash
 set -e
-echo "=== Fetch Crawl MCP v4.0.0 — Deploy ==="
+echo "=== Fetch Crawl MCP — Deploy ==="
+if [ -z "${FETCH_CRAWL_TOKENS:-}" ] && ! grep -qs '^FETCH_CRAWL_TOKENS=.\+' .env; then
+  echo "❌ FETCH_CRAWL_TOKENS manquant (variable ou fichier .env) : le serveur refuserait de démarrer."
+  exit 1
+fi
 echo "Step 1: Building TypeScript..."
 npm run build
 echo "Step 2: Building Docker image..."

@@ -1,5 +1,16 @@
 # Changelog
 
+## [4.3.0] - 2026-10-02
+
+### Security
+- **Authentication** on the HTTP transports: `POST /mcp` and `GET /sse` require a bearer token from `FETCH_CRAWL_TOKENS` (header `Authorization: Bearer`, or `?token=` for URL-only clients). `/health` stays public. The server refuses to start in production without tokens (`ALLOW_UNAUTHENTICATED=true` to override in development).
+- **SSRF protection** on every outgoing request: only public addresses on ports 80/443. Global undici dispatcher checks the resolved IP at connect time (redirects and DNS rebinding included); all Puppeteer browsers go through `launchBrowser()`, which intercepts every page request (navigations, sub-resources, popups).
+- `check_consent_mode` and `intercept_tracking_requests` now only observe requests; the guard is the only code resolving intercepted requests.
+- JSON body limit set to 1 MB.
+
+### Tests
+- 63 new tests (SSRF validation, connect-time blocking against a real local server, auth over HTTP, real-Chromium navigation/sub-resource blocking). 139 passing.
+
 ## [4.2.0] - 2026-04-10
 
 ### Added

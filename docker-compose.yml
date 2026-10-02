@@ -9,5 +9,8 @@ services:
     environment:
       - NODE_ENV=production
       - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+      # Jetons clients, séparés par des virgules (fichier .env à côté de ce compose, non versionné).
+      # Sans jeton, le serveur refuse de démarrer en production.
+      - FETCH_CRAWL_TOKENS=${FETCH_CRAWL_TOKENS:?FETCH_CRAWL_TOKENS manquant dans .env}
     mem_limit: 2g
     cpus: 1.5

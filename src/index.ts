@@ -3,6 +3,8 @@
 import { readFileSync } from "node:fs";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { createServer } from "./server.js";
+import { installNetworkGuard } from "./utils/net-guard.js";
+import { loadAuthConfig, requireAuth } from "./auth.js";
 
 const pkg = JSON.parse(
   readFileSync(new URL("../package.json", import.meta.url), "utf-8")
@@ -29,8 +31,16 @@ async function startHttp() {
     "@modelcontextprotocol/sdk/server/sse.js"
   );
 
+  const authConfig = loadAuthConfig();
+  if (authConfig.allowUnauthenticated) {
+    console.warn("⚠️  FETCH_CRAWL_TOKENS is empty: HTTP endpoints are OPEN (development only)");
+  } else {
+    console.log(`Auth: ${authConfig.tokens.length} token(s) configured`);
+  }
+  const auth = requireAuth(authConfig);
+
   const app = express();
-  app.use(express.json());
+  app.use(express.json({ limit: "1mb" }));
 
   // SSE session store
   const sseTransports = new Map<string, InstanceType<typeof SSEServerTransport>>();
@@ -47,7 +57,7 @@ async function startHttp() {
     res.status(200).end();
   });
 
-  app.post("/mcp", async (req, res) => {
+  app.post("/mcp", auth, async (req, res) => {
     try {
       const server = createServer();
       const transport = new StreamableHTTPServerTransport({
@@ -73,7 +83,7 @@ async function startHttp() {
 
   // --- SSE transport (for Claude.ai connector) ---
 
-  app.get("/sse", async (_req, res) => {
+  app.get("/sse", auth, async (_req, res) => {
     try {
       const server = createServer();
       const transport = new SSEServerTransport("/messages", res);
@@ -96,6 +106,8 @@ async function startHttp() {
     }
   });
 
+  // No token check here: the session id is an unguessable UUID that only an
+  // authenticated GET /sse can create, and it dies with that SSE stream.
   app.post("/messages", async (req, res) => {
     const sessionId = req.query.sessionId as string | undefined;
 
@@ -130,6 +142,8 @@ async function startHttp() {
 }
 
 async function main() {
+  // Before any tool runs: every fetch() must target a public address.
+  installNetworkGuard();
   if (isHttpMode) {
     await startHttp();
   } else {

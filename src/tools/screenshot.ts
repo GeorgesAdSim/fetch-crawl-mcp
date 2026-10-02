@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { Page } from "puppeteer";
 import { withPuppeteerTimeout } from "../utils/fetcher.js";
+import { launchBrowser } from "../utils/browser.js";
 
 export const screenshotSchema = {
   url: z.string().url().describe("The URL to capture"),
@@ -120,11 +121,9 @@ export async function screenshot({
 
   try {
     return await withPuppeteerTimeout(async () => {
-      const puppeteer = await import("puppeteer");
-
       let browser;
       try {
-        browser = await puppeteer.default.launch({
+        browser = await launchBrowser({
           headless: true,
           args: [
             "--no-sandbox",

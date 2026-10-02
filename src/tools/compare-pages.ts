@@ -14,6 +14,7 @@ import {
   createIssue,
   generateRecommendations,
 } from "../utils/response.js";
+import { launchBrowser } from "../utils/browser.js";
 
 export const comparePagesSchema = {
   urlA: z.string().url().describe("First URL to compare"),
@@ -292,11 +293,9 @@ function calculatePageScore(p: PageSummary): number {
 
 async function takeScreenshots(urlA: string, urlB: string): Promise<{ screenshotA: string; screenshotB: string }> {
   return withPuppeteerTimeout(async () => {
-    const puppeteer = await import("puppeteer");
-
     let browser;
     try {
-      browser = await puppeteer.default.launch({
+      browser = await launchBrowser({
         headless: true,
         args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
       });
